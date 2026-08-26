@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0">
+<meta name="theme-color" content="#1a1f2e">
+<title>云同步便利贴 · 记事本与待办看板</title>
+<style>
+/* ============ TOKENS (cool tech) ============ */
+:root{
+  --page-bg:#eef1f6; --surface-card:#ffffff; --surface-nested:#f2f5fa;
+  --text:#1a1f2e; --text-secondary:#5a6378; --text-tertiary:#8590a8;
+  --accent:#2c4a7c; --accent-2:#3b6ea5; --accent-muted:#e8eef7; --on-accent:#ffffff;
+  --border:#e1e6f0; --border-input:#c8d1e0;
+  --module-1:#4a6a9c; --module-2:#6a9a7a; --module-3:#a08850; --module-4:#9a6a5a; --module-5:#7a7aa0;
+  --danger:#c0504a; --danger-muted:#f7e8e6;
+  --drawer-bg:#161b2a; --drawer-bg-top:#1f2640; --drawer-text:#e8edf5; --drawer-text-mute:#8b94ad; --drawer-hover:#222a40; --drawer-active:#2f3a5c;
+  --shadow-card:0 1px 2px rgba(26,31,46,.06),0 4px 14px rgba(26,31,46,.05);
+  --shadow-overlay:0 18px 50px rgba(16,20,38,.30);
+  --radius-control:8px; --radius-tile:10px; --radius-card:14px; --radius-sheet:20px;
+  --nav-h:60px; --side-w:248px;
+  --greet-grad:linear-gradient(135deg,#1f2640 0%,#2c4a7c 55%,#3b6ea5 100%);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%}
+body{
+  font-family:var(--font); color:var(--text); background:var(--page-bg);
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+body.locked{overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#c8d1e0;border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ============ APP SHELL ============ */
+.app{display:flex;min-height:100vh;height:100vh;overflow:hidden}
+/* sidebar */
+.sidebar{
+  width:var(--side-w);flex-shrink:0;background:var(--drawer-bg);
+  color:var(--drawer-text);display:flex;flex-direction:column;
+  position:relative;z-index:30;
+}
+.sidebar::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,var(--drawer-bg-top),var(--drawer-bg) 40%);z-index:-1}
+.brand{display:flex;align-items:center;gap:12px;padding:22px 20px 18px}
+.brand .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#3b6ea5,#2c4a7c);display:grid;place-items:center;font-size:19px;box-shadow:0 4px 12px rgba(59,110,165,.4)}
+.brand .bt{font-size:15px;font-weight:600}
+.brand .bs{font-size:11px;color:var(--drawer-text-mute);margin-top:2px}
+.nav{flex:1;padding:8px 12px;display:flex;flex-direction:column;gap:3px;overflow-y:auto}
+.nav .item{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:var(--radius-tile);color:var(--drawer-text-mute);font-size:14px;font-weight:500;transition:.15s;width:100%;text-align:left}
+.nav .item:hover{background:var(--drawer-hover);color:var(--drawer-text)}
+.nav .item.active{background:var(--drawer-active);color:var(--drawer-text)}
+.nav .item .ico{width:20px;height:20px;flex-shrink:0;display:grid;place-items:center}
+.nav .item .ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nav .badge{margin-left:auto;background:var(--accent-2);color:#fff;font-size:11px;font-weight:600;min-width:20px;height:20px;padding:0 6px;border-radius:10px;display:grid;place-items:center}
+.sidebar .side-foot{padding:14px 18px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:var(--drawer-text-mute)}
+.sync-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#5a6378;margin-right:6px;vertical-align:middle}
+.sync-dot.on{background:#4ade80;box-shadow:0 0 8px #4ade80}
+.sync-dot.off{background:#f59e0b}
+.sync-dot.err{background:#ef4444}
+.sync-dot.spin{background:#3b6ea5;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* main */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.topbar{height:var(--nav-h);display:none;align-items:center;gap:12px;padding:0 14px;background:var(--surface-card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
+.topbar .menu-btn{width:42px;height:42px;border-radius:var(--radius-tile);display:grid;place-items:center}
+.topbar .menu-btn:hover{background:var(--surface-nested)}
+.topbar .menu-btn svg{width:22px;height:22px;stroke:var(--text);fill:none;stroke-width:1.8;stroke-linecap:round}
+.topbar .title{font-size:16px;font-weight:600}
+.topbar .sp{margin-left:auto}
+
+.content{flex:1;overflow-y:auto;padding:26px 30px 40px;scroll-behavior:smooth}
+.content.compact{padding:18px 18px 30px}
+.view{display:none;animation:fade .25s ease}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.view-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.view-head h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+.view-head .sub{color:var(--text-secondary);font-size:13px;margin-top:3px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:var(--radius-tile);font-size:13px;font-weight:600;background:var(--accent);color:var(--on-accent);transition:.15s;white-space:nowrap}
+.btn:hover{background:var(--accent-2)}
+.btn.ghost{background:var(--surface-nested);color:var(--text);border:1px solid var(--border)}
+.btn.ghost:hover{background:#e7ebf3}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.sm{padding:6px 11px;font-size:12px}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* cards generic */
+.card{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--shadow-card)}
+.grid{display:grid;gap:16px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:var(--accent-muted);color:var(--accent)}
+.empty{padding:48px 20px;text-align:center;color:var(--text-tertiary)}
+.empty .ic{font-size:34px;margin-bottom:10px;opacity:.7}
+.empty p{margin:6px 0 0;font-size:13px}
+
+/* ============ DASHBOARD ============ */
+.greet{border-radius:var(--radius-card);padding:26px 28px;color:#fff;position:relative;overflow:hidden;background:var(--greet-grad);box-shadow:0 8px 26px rgba(31,38,64,.28)}
+.greet::after{content:"";position:absolute;right:-40px;top:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.16),transparent 70%)}
+.greet .hi{font-size:14px;opacity:.85}
+.greet .nm{font-size:26px;font-weight:700;margin-top:4px}
+.greet .dt{font-size:13px;opacity:.8;margin-top:8px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
+.stat{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);padding:16px;box-shadow:var(--shadow-card)}
+.stat .n{font-size:24px;font-weight:700}
+.stat .l{font-size:12px;color:var(--text-secondary);margin-top:3px}
+.stat .ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;margin-bottom:10px;font-size:16px}
+.dash-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.panel{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:18px}
+.panel h3{margin:0 0 14px;font-size:15px;font-weight:650;display:flex;align-items:center;gap:8px}
+.panel h3 .e{font-size:16px}
+.mini-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-tile)}
+.mini-row:hover{background:var(--surface-nested)}
+.mini-row .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.mini-row .t{font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-row.done .t{text-decoration:line-through;color:var(--text-tertiary)}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.quick .btn{flex:1;min-width:120px;justify-content:center}
+
+/* ============ NOTES ============ */
+.notes-toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.search{flex:1;min-width:180px;display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--surface-card);border:1px solid var(--border-input);border-radius:var(--radius-tile)}
+.search svg{width:16px;height:16px;stroke:var(--text-tertiary);fill:none;stroke-width:1.9}
+.search input{border:none;outline:none;background:none;flex:1;font-size:13px;min-width:0}
+.notes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px}
+.note{border-radius:var(--radius-card);padding:15px 16px;display:flex;flex-direction:column;min-height:128px;cursor:pointer;transition:.15s;position:relative;border:1px solid rgba(0,0,0,.04);box-shadow:var(--shadow-card);break-inside:avoid}
+.note:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(26,31,46,.12)}
+.note .nt{font-weight:650;font-size:14px;margin-bottom:6px;word-break:break-word}
+.note .nb{font-size:13px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;flex:1;overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical}
+.note .nf{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--text-tertiary)}
+.note .pin{position:absolute;top:10px;right:10px;font-size:14px;opacity:.5}
+.note .pin.on{opacity:1}
+.n-color1{background:#fff7e6}.n-color2{background:#e8f3ff}.n-color3{background:#eafaf0}.n-color4{background:#fdeef4}.n-color5{background:#f1eefe}.n-color6{background:#eef2f7}
+
+/* ============ KANBAN ============ */
+.kanban{display:flex;gap:16px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.col{flex:0 0 300px;background:var(--surface-nested);border:1px solid var(--border);border-radius:var(--radius-card);display:flex;flex-direction:column;max-height:calc(100vh - 200px)}
+.col.drag-over{outline:2px dashed var(--accent);outline-offset:-2px}
+.col-head{display:flex;align-items:center;gap:9px;padding:13px 14px;border-bottom:1px solid var(--border)}
+.col-head .cdot{width:10px;height:10px;border-radius:50%}
+.col-head .ct{font-weight:650;font-size:14px;flex:1}
+.col-head .cc{font-size:12px;color:var(--text-tertiary);background:var(--surface-card);padding:2px 9px;border-radius:10px}
+.col-body{padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;flex:1;min-height:60px}
+.kcard{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-tile);padding:11px 12px;box-shadow:var(--shadow-card);cursor:grab;transition:.12s;position:relative}
+.kcard:hover{border-color:var(--border-input)}
+.kcard.dragging{opacity:.4}
+.kcard .kt{font-size:13px;font-weight:500;word-break:break-word;line-height:1.45}
+.kcard .kf{display:flex;align-items:center;gap:7px;margin-top:9px;flex-wrap:wrap}
+.kcard .pri{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.03em}
+.pri-high{background:var(--danger-muted);color:var(--danger)}
+.pri-mid{background:#fdf3e3;color:#a07a2a}
+.pri-low{background:#e6f0e8;color:#4a7a55}
+.kcard .due{font-size:11px;color:var(--text-tertiary);display:flex;align-items:center;gap:3px}
+.kcard .due.over{color:var(--danger);font-weight:600}
+.kcard .acts{position:absolute;top:8px;right:8px;display:none}
+.kcard:hover .acts{display:flex;gap:4px}
+.kcard .acts button{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--surface-nested)}
+.kcard .acts button:hover{background:#dde3ee}
+.kcard .acts svg{width:14px;height:14px;stroke:var(--text-secondary);fill:none;stroke-width:1.9}
+.col-add{margin:8px 10px 10px;padding:9px;border-radius:var(--radius-tile);border:1px dashed var(--border-input);color:var(--text-tertiary);font-size:12px;text-align:center}
+.col-add:hover{color:var(--accent);border-color:var(--accent)}
+
+/* ============ CALENDAR ============ */
+.cal-wrap{display:grid;grid-template-columns:1fr;gap:16px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-head .mo{font-size:17px;font-weight:700}
+.cal-head .nav-btns{display:flex;gap:6px}
+.cal-head .nav-btns button{width:36px;height:36px;border-radius:var(--radius-tile);background:var(--surface-card);border:1px solid var(--border);display:grid;place-items:center}
+.cal-head .nav-btns button:hover{background:var(--surface-nested)}
+.cal-head .nav-btns svg{width:18px;height:18px;stroke:var(--text);fill:none;stroke-width:1.8}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-grid .dw{font-size:11px;color:var(--text-tertiary);text-align:center;padding:6px 0;font-weight:600}
+.cal-cell{aspect-ratio:1;min-height:46px;border-radius:var(--radius-tile);border:1px solid var(--border);background:var(--surface-card);padding:6px;cursor:pointer;position:relative;transition:.12s;display:flex;flex-direction:column}
+.cal-cell:hover{border-color:var(--accent)}
+.cal-cell.today{border-color:var(--accent);border-width:2px}
+.cal-cell.other{opacity:.4}
+.cal-cell.sel{background:var(--accent-muted);border-color:var(--accent)}
+.cal-cell .dn{font-size:12px;font-weight:600}
+.cal-cell .ev-dots{display:flex;gap:2px;margin-top:auto;flex-wrap:wrap}
+.cal-cell .ev-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.day-panel{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px;box-shadow:var(--shadow-card)}
+.day-panel h3{margin:0 0 14px;font-size:15px;font-weight:650}
+.ev-item{display:flex;gap:11px;padding:11px;border-radius:var(--radius-tile);border:1px solid var(--border);margin-bottom:9px}
+.ev-item:hover{background:var(--surface-nested)}
+.ev-time{font-size:12px;font-weight:700;color:var(--accent);min-width:54px}
+.ev-body .et{font-size:13px;font-weight:600}
+.ev-body .en{font-size:12px;color:var(--text-secondary);margin-top:2px}
+
+/* ============ SYNC SETTINGS ============ */
+.sync-wrap{max-width:680px}
+.sync-card{padding:22px;margin-bottom:16px}
+.sync-card h3{margin:0 0 6px;font-size:16px;font-weight:700}
+.sync-card p.desc{color:var(--text-secondary);font-size:13px;margin:0 0 16px;line-height:1.6}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px}
+.field input,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border-input);border-radius:var(--radius-tile);background:var(--surface-nested);outline:none;transition:.15s;font-size:13px}
+.field input:focus,.field textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-muted)}
+.status-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:var(--radius-tile);background:var(--surface-nested);margin-bottom:16px;font-size:13px}
+.status-row .lbl{color:var(--text-secondary)}
+.sync-code-box{background:var(--surface-nested);border:1px dashed var(--border-input);border-radius:var(--radius-tile);padding:12px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;word-break:break-all;margin:10px 0}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+.steps li{position:relative;padding:8px 0 8px 34px;font-size:13px;color:var(--text-secondary);line-height:1.6;counter-increment:s}
+.steps li::before{content:counter(s);position:absolute;left:0;top:7px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+.steps a{color:var(--accent);font-weight:600}
+.steps code{background:var(--surface-nested);padding:1px 5px;border-radius:5px;font-size:12px}
+
+/* ============ MODAL ============ */
+.modal-root{position:fixed;inset:0;z-index:100;display:none;align-items:flex-end;justify-content:center}
+.modal-root.open{display:flex}
+.modal-root.center{align-items:center}
+.overlay{position:absolute;inset:0;background:rgba(16,20,38,.45);backdrop-filter:blur(2px);animation:fade .2s}
+.sheet{position:relative;width:100%;background:var(--surface-card);border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;box-shadow:var(--shadow-overlay);max-height:88vh;display:flex;flex-direction:column;animation:slideUp .26s cubic-bezier(.2,.8,.2,1)}
+.modal-root.center .sheet{border-radius:var(--radius-card);max-width:520px;width:calc(100% - 32px);animation:pop .2s}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
+@keyframes pop{from{transform:scale(.96);opacity:.6}to{transform:none;opacity:1}}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}
+.sheet-head h3{margin:0;font-size:15px;font-weight:700}
+.sheet-head .grab{width:38px;height:5px;border-radius:5px;background:var(--border-input);margin:0 auto 8px}
+.modal-root.center .sheet .grab{display:none}
+.sheet-body{padding:16px 18px;overflow-y:auto;flex:1}
+.sheet-foot{padding:14px 18px;border-top:1px solid var(--border);display:flex;gap:10px}
+.sheet-foot .btn{flex:1;justify-content:center}
+.icon-btn{width:32px;height:32px;border-radius:9px;display:grid;place-items:center}
+.icon-btn:hover{background:var(--surface-nested)}
+.icon-btn svg{width:18px;height:18px;stroke:var(--text-secondary);fill:none;stroke-width:1.8;stroke-linecap:round}
+.seg{display:flex;gap:6px;background:var(--surface-nested);padding:4px;border-radius:var(--radius-tile)}
+.seg button{flex:1;padding:8px;border-radius:7px;font-size:12px;font-weight:600;color:var(--text-secondary)}
+.seg button.active{background:var(--surface-card);color:var(--text);box-shadow:var(--shadow-card)}
+.color-pick{display:flex;gap:8px;flex-wrap:wrap}
+.color-pick button{width:30px;height:30px;border-radius:50%;border:2px solid transparent}
+.color-pick button.active{border-color:var(--accent)}
+.swatch1{background:#fff7e6}.swatch2{background:#e8f3ff}.swatch3{background:#eafaf0}.swatch4{background:#fdeef4}.swatch5{background:#f1eefe}.swatch6{background:#eef2f7}
+
+/* FAB + bottom tab (mobile) */
+.fab{display:none;position:fixed;right:18px;bottom:78px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;box-shadow:0 8px 22px rgba(44,74,124,.45);z-index:25;align-items:center;justify-content:center}
+.fab svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round}
+.tabbar{display:none;position:fixed;left:0;right:0;bottom:0;height:62px;background:var(--surface-card);border-top:1px solid var(--border);z-index:25;padding-bottom:env(safe-area-inset-bottom)}
+.tabbar-inner{display:flex;height:100%}
+.tabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--text-tertiary);font-size:10px;font-weight:600}
+.tabbar .tab.active{color:var(--accent)}
+.tabbar .tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);background:var(--drawer-bg);color:#fff;padding:11px 18px;border-radius:var(--radius-tile);font-size:13px;z-index:200;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-overlay)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:900px){
+  .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .26s cubic-bezier(.2,.8,.2,1);box-shadow:var(--shadow-overlay)}
+  .sidebar.open{transform:none}
+  .topbar{display:flex}
+  .content{padding:16px 14px 100px}
+  .content.compact{padding:14px 12px 100px}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .dash-cols{grid-template-columns:1fr}
+  .view-head h1{font-size:19px}
+  .fab{display:flex}
+  .tabbar{display:block}
+  .col{flex:0 0 84vw}
+  .greet{padding:20px}
+  .greet .nm{font-size:22px}
+}
+@media (max-width:520px){
+  .notes-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .note{min-height:108px;padding:13px}
+  .stat-grid{gap:10px}
+}
+.drawer-overlay{position:fixed;inset:0;background:rgba(16,20,38,.4);z-index:25;display:none}
+.drawer-overlay.show{display:block}
+.hidden{display:none!important}
+/* desktop: centered modal cards instead of bottom sheet */
+@media(min-width:901px){.modal-root{align-items:center}.modal-root .sheet{border-radius:var(--radius-card)}.modal-root .sheet .grab{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="logo">📝</div>
+      <div><div class="bt">云记事板</div><div class="bs">便利贴 · 待办 · 日程</div></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <div><span class="sync-dot off" id="sideSyncDot"></span><span id="sideSyncTxt">本地模式 · 未连接</span></div>
+    </div>
+  </aside>
+  <div class="drawer-overlay" id="drawerOverlay" onclick="toggleDrawer(false)"></div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-btn" onclick="toggleDrawer(true)" aria-label="菜单"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <div class="title" id="topTitle">仪表盘</div>
+    </div>
+    <div class="content" id="content">
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard"></section>
+      <!-- NOTES -->
+      <section class="view" id="view-notes"></section>
+      <!-- TODOS -->
+      <section class="view" id="view-todos"></section>
+      <!-- CALENDAR -->
+      <section class="view" id="view-calendar"></section>
+      <!-- SYNC -->
+      <section class="view" id="view-sync"></section>
+    </div>
+  </div>
+</div>
+
+<!-- FAB + TABBAR -->
+<button class="fab" id="fab" onclick="onFab()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+<nav class="tabbar" id="tabbar"><div class="tabbar-inner" id="tabbarInner"></div></nav>
+
+<!-- MODAL -->
+<div class="modal-root" id="modalRoot">
+  <div class="overlay" onclick="closeModal()"></div>
+  <div class="sheet" id="modalSheet"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   ICONS (lucide-style paths)
+========================================================= */
+const ICONS={
+  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  notes:'<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h6"/>',
+  kanban:'<rect x="3" y="3" width="6" height="14" rx="1"/><rect x="11" y="3" width="6" height="9" rx="1"/><rect x="19" y="3" width="2" height="6" rx="1"/>',
+  calendar:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  sync:'<path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3"/><path d="M21 4v5h-5M3 20v-5h5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  pin:'<path d="M12 17v5M9 10.5V4h6v6.5l2 2.5v3H7v-3z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  chevron:'<path d="M9 18l6-6-6-6"/>',
+  x:'<path d="M18 6L6 18M6 6l12 12"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  flame:'<path d="M12 2c1 3-2 4-2 7a2 2 0 0 0 4 0c0-1 .5-1.5 1-2 1 1.5 2 3 2 5a5 5 0 0 1-10 0c0-3 3-5 5-10z"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  book:'<path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M4 18a2 2 0 0 1 2-2h12"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  download:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
+};
+function icon(n){return '<span class="ico"><svg viewBox="0 0 24 24">'+(ICONS[n]||ICONS.dashboard)+'</svg></span>';}
+
+/* =========================================================
+   STATE & PERSISTENCE (local)
+========================================================= */
+const LS_KEY='cloudworkbench_v1';
+const SYNC_KEY='cloudworkbench_sync_v1';
+const DEVICE_ID=(()=>{let d=localStorage.getItem('cw_did');if(!d){d='dev_'+Math.random().toString(36).slice(2,10);localStorage.setItem('cw_did',d);}return d;})();
+let state={notes:[],todos:[],events:[],meta:{}};
+let syncCfg={enabled:false,key:'',binId:'',lastSync:0};
+let curView='dashboard';
+let calCursor=new Date();calCursor.setDate(1);
+let calSelDate=todayStr();
+let searchQuery='';
+
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function uid(){return (crypto&&crypto.randomUUID)?crypto.randomUUID():('id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8));}
+function now(){return Date.now();}
+function fmtDate(ts){const d=new Date(ts);return d.getMonth()+1+'月'+d.getDate()+'日';}
+function fmtTime(ts){const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function greeting(){const h=new Date().getHours();if(h<6)return'夜深了';if(h<11)return'早上好';if(h<14)return'中午好';if(h<18)return'下午好';if(h<22)return'晚上好';return'夜深了';}
+function weekdayCN(d){return['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];}
+
+function loadLocal(){
+  try{const raw=localStorage.getItem(LS_KEY);if(raw){state=JSON.parse(raw);} }catch(e){state={notes:[],todos:[],events:[],meta:{}};}
+  if(!state.notes)state.notes=[];if(!state.todos)state.todos=[];if(!state.events)state.events=[];if(!state.meta)state.meta={};
+  try{const raw2=localStorage.getItem(SYNC_KEY);if(raw2){syncCfg=Object.assign(syncCfg,JSON.parse(raw2));}}catch(e){}
+}
+function saveLocal(){localStorage.setItem(LS_KEY,JSON.stringify(state));markDirty();}
+
+/* =========================================================
+   CLOUD SYNC (jsonbin.io)
+   - enabled via Master Key; app creates a private bin
+   - per-item merge by id+updatedAt; soft-delete by deletedAt
+========================================================= */
+const JB='https://api.jsonbin.io/v3/b';
+let syncTimer=null,dirty=false,pushing=false,online=navigator.onLine;
+function markDirty(){dirty=true;}
+
+function setSyncStatus(kind,txt){
+  const dot=document.getElementById('sideSyncDot'),t=document.getElementById('sideSyncTxt');
+  if(!dot)return;
+  dot.className='sync-dot '+(kind||'off');
+  t.textContent=txt||'本地模式 · 未连接';
+}
+
+async function jbCreate(doc){
+  const r=await fetch(JB,{method:'POST',headers:{'Content-Type':'application/json','X-Master-Key':syncCfg.key,'X-Bin-Private':'true','X-Bin-Name':'cloudworkbench'},body:JSON.stringify(doc)});
+  if(!r.ok)throw new Error('创建云端存储失败 ('+r.status+')');
+  const j=await r.json();return j.metadata&&j.metadata.id;
+}
+async function jbGet(binId){
+  const r=await fetch(JB+'/'+binId+'/latest',{headers:{'X-Master-Key':syncCfg.key}});
+  if(r.status===404)return null;
+  if(!r.ok)throw new Error('读取云端失败 ('+r.status+')');
+  const j=await r.json();return j.record;
+}
+async function jbPut(binId,doc){
+  const r=await fetch(JB+'/'+binId,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':syncCfg.key},body:JSON.stringify(doc)});
+  if(!r.ok)throw new Error('写入云端失败 ('+r.status+')');
+  return (await r.json()).record;
+}
+
+/* per-item merge across collections; returns true if cloud had newer/different data */
+function doMerge(cloudDoc){
+  if(!cloudDoc)return false;
+  let changed=false;
+  ['notes','todos','events'].forEach(c=>{
+    const localArr=state[c]||[];
+    const cloudArr=cloudDoc[c]||[];
+    const map=new Map();
+    localArr.forEach(x=>map.set(x.id,x));
+    cloudArr.forEach(x=>{
+      const ex=map.get(x.id);
+      if(!ex){map.set(x.id,x);changed=true;}
+      else if((x.updatedAt||0)>(ex.updatedAt||0)){map.set(x.id,x);changed=true;}
+    });
+    state[c]=Array.from(map.values());
+  });
+  if(changed){saveLocal();}
+  return changed;
+}
+
+async function syncCycle(quiet){
+  if(!syncCfg.enabled||!syncCfg.binId||!syncCfg.key){return;}
+  if(!online){setSyncStatus('off','离线 · 待联网同步');return;}
+  setSyncStatus('spin','正在同步…');
+  try{
+    const cloud=await jbGet(syncCfg.binId);
+    doMerge(cloud);
+    if(dirty&&!pushing){
+      pushing=true;
+      await jbPut(syncCfg.binId,stripState());
+      dirty=false;
+      pushing=false;
+    }
+    syncCfg.lastSync=now();
+    localStorage.setItem(SYNC_KEY,JSON.stringify(syncCfg));
+    setSyncStatus('on','已同步 · '+fmtTime(syncCfg.lastSync));
+    renderAll();
+  }catch(e){
+    setSyncStatus('err','同步失败 · '+e.message.slice(0,40));
+    if(!quiet)toast('同步失败：'+e.message);
+  }
+}
+function stripState(){return {notes:state.notes,todos:state.todos,events:state.events,meta:{...state.meta,deviceId:DEVICE_ID},ts:now()};}
+function startSyncLoop(){stopSyncLoop();syncTimer=setInterval(()=>syncCycle(true),8000);}
+function stopSyncLoop(){if(syncTimer){clearInterval(syncTimer);syncTimer=null;}}
+
+async function enableSync(key){
+  syncCfg.key=key;
+  setSyncStatus('spin','正在创建云端存储…');
+  try{
+    const id=await jbCreate(stripState());
+    if(!id)throw new Error('未返回存储ID');
+    syncCfg.binId=id;syncCfg.enabled=true;syncCfg.lastSync=now();
+    localStorage.setItem(SYNC_KEY,JSON.stringify(syncCfg));
+    setSyncStatus('on','已连接云端');
+    startSyncLoop();
+    toast('云同步已开启 ✓');
+    renderSyncView();renderNav();
+    return id;
+  }catch(e){
+    setSyncStatus('err','连接失败');
+    syncCfg.enabled=false;
+    toast('开启失败：'+e.message);
+    throw e;
+  }
+}
+async function connectExisting(key,binId){
+  syncCfg.key=key;syncCfg.binId=binId;
+  setSyncStatus('spin','正在连接…');
+  try{
+    const cloud=await jbGet(binId);
+    if(cloud===null)throw new Error('找不到该存储ID，请检查');
+    doMerge(cloud);
+    dirty=true;
+    syncCfg.enabled=true;syncCfg.lastSync=now();
+    localStorage.setItem(SYNC_KEY,JSON.stringify(syncCfg));
+    await syncCycle();
+    startSyncLoop();
+    toast('已连接到云端 ✓');
+    renderSyncView();renderNav();renderAll();
+  }catch(e){
+    setSyncStatus('err','连接失败');
+    syncCfg.enabled=false;
+    toast('连接失败：'+e.message);
+  }
+}
+function disconnectSync(){
+  if(!confirm('断开后本机将停止云同步，本地数据保留。是否继续？'))return;
+  syncCfg.enabled=false;syncCfg.binId='';syncCfg.key='';syncCfg.lastSync=0;
+  localStorage.setItem(SYNC_KEY,JSON.stringify(syncCfg));
+  stopSyncLoop();setSyncStatus('off','本地模式 · 未连接');
+  toast('已断开云同步');renderSyncView();renderNav();
+}
+
+window.addEventListener('online',()=>{online=true;toast('网络已恢复，开始同步');if(syncCfg.enabled)syncCycle();});
+window.addEventListener('offline',()=>{online=false;setSyncStatus('off','离线 · 待联网同步');});
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+const NAV=[
+  {id:'dashboard',icon:'dashboard',name:'仪表盘'},
+  {id:'notes',icon:'notes',name:'便利贴'},
+  {id:'todos',icon:'kanban',name:'待办看板'},
+  {id:'calendar',icon:'calendar',name:'日程日历'},
+  {id:'sync',icon:'sync',name:'同步设置'}
+];
+function renderNav(){
+  const nav=document.getElementById('nav');
+  nav.innerHTML=NAV.map(n=>{const badge=getBadge(n.id);return `<button class="item ${n.id===curView?'active':''}" data-nav="${n.id}">${icon(n.icon)}<span>${n.name}</span>${badge?`<span class="badge">${badge}</span>`:''}</button>`;}).join('');
+  nav.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>switchView(b.dataset.nav));
+  // tabbar (top 4)
+  const tb=document.getElementById('tabbarInner');
+  tb.innerHTML=NAV.slice(0,4).map(n=>`<button class="tab ${n.id===curView?'active':''}" data-tab="${n.id}">${icon(n.icon)}<span>${n.name}</span></button>`).join('')
+    +`<button class="tab ${curView==='sync'?'active':''}" data-tab="sync">${icon('sync')}<span>设置</span></button>`;
+  tb.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchView(b.dataset.tab));
+}
+function getBadge(id){
+  if(id==='todos')return state.todos.filter(t=>!t.done&&!t.deletedAt).length||'';
+  if(id==='calendar')return state.events.filter(e=>e.date===todayStr()&&!e.deletedAt).length||'';
+  return '';
+}
+const TITLES={dashboard:'仪表盘',notes:'便利贴',todos:'待办看板',calendar:'日程日历',sync:'同步设置'};
+function switchView(id){
+  if(!NAV.find(n=>n.id===id))id='dashboard';
+  curView=id;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  document.getElementById('topTitle').textContent=TITLES[id]||'';
+  renderNav();
+  toggleDrawer(false);
+  if(id==='dashboard')renderDashboard();
+  if(id==='notes')renderNotes();
+  if(id==='todos')renderTodos();
+  if(id==='calendar')renderCalendar();
+  if(id==='sync')renderSyncView();
+  // FAB visibility (mobile only — desktop uses header buttons)
+  const fab=document.getElementById('fab');
+  if(id==='sync'||id==='dashboard'||window.innerWidth>900){fab.style.display='none';}else{fab.style.display='flex';}
+}
+function toggleDrawer(open){
+  const sb=document.getElementById('sidebar'),ov=document.getElementById('drawerOverlay');
+  sb.classList.toggle('open',open);ov.classList.toggle('show',open);
+  document.body.classList.toggle('locked',open);
+}
+function onFab(){
+  if(curView==='notes')openNoteModal();
+  else if(curView==='todos')openTodoModal('todo');
+  else if(curView==='calendar')openEventModal(calSelDate);
+}
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
+function renderDashboard(){
+  const v=document.getElementById('view-dashboard');
+  const todosToday=state.todos.filter(t=>!t.deletedAt);
+  const done=todosToday.filter(t=>t.done).length;
+  const pend=todosToday.filter(t=>!t.done).length;
+  const notesC=state.notes.filter(n=>!n.deletedAt).length;
+  const evToday=state.events.filter(e=>e.date===todayStr()&&!e.deletedAt).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  const today=new Date();
+  v.innerHTML=`
+    <div class="greet">
+      <div class="hi">${greeting()}，</div>
+      <div class="nm">欢迎回到云记事板 👋</div>
+      <div class="dt">${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日 · ${weekdayCN(today)}</div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="ic" style="background:var(--accent-muted);color:var(--accent)">📋</div><div class="n">${pend}</div><div class="l">待办任务</div></div>
+      <div class="stat"><div class="ic" style="background:#e6f0e8;color:#4a7a55">✓</div><div class="n">${done}</div><div class="l">已完成</div></div>
+      <div class="stat"><div class="ic" style="background:#fdf3e3;color:#a07a2a">📌</div><div class="n">${notesC}</div><div class="l">便利贴</div></div>
+      <div class="stat"><div class="ic" style="background:#fdeef4;color:#b06a7e">🗓️</div><div class="n">${evToday.length}</div><div class="l">今日日程</div></div>
+    </div>
+    <div class="dash-cols">
+      <div class="panel">
+        <h3><span class="e">⏰</span>今日待办</h3>
+        ${pend?todosToday.filter(t=>!t.done).slice(0,6).map(t=>`<div class="mini-row"><span class="dot" style="background:${priColor(t.priority)}"></span><span class="t">${escapeHtml(t.text)}</span></div>`).join(''):'<div class="empty" style="padding:20px"><p>暂无待办，去添加吧</p></div>'}
+        <div class="quick"><button class="btn ghost sm" onclick="switchView('todos')">查看看板</button><button class="btn sm" onclick="switchView('todos');setTimeout(()=>openTodoModal('todo'),100)">+ 添加</button></div>
+      </div>
+      <div class="panel">
+        <h3><span class="e">📅</span>今日日程</h3>
+        ${evToday.length?evToday.map(e=>`<div class="mini-row"><span class="dot" style="background:var(--accent)"></span><span class="t">${escapeHtml(e.time||'全天')} · ${escapeHtml(e.title)}</span></div>`).join(''):'<div class="empty" style="padding:20px"><p>今天没有日程</p></div>'}
+        <div class="quick"><button class="btn ghost sm" onclick="switchView('calendar')">打开日历</button><button class="btn sm" onclick="switchView('calendar');setTimeout(()=>openEventModal('${todayStr()}'),100)">+ 添加</button></div>
+      </div>
+    </div>`;
+}
+function priColor(p){return p==='high'?'var(--danger)':p==='mid'?'#a07a2a':'#4a7a55';}
+
+/* =========================================================
+   NOTES
+========================================================= */
+function renderNotes(){
+  const v=document.getElementById('view-notes');
+  let list=state.notes.filter(n=>!n.deletedAt);
+  if(searchQuery)list=list.filter(n=>(n.title||'').toLowerCase().includes(searchQuery)||(n.body||'').toLowerCase().includes(searchQuery)||(n.tag||'').toLowerCase().includes(searchQuery));
+  list.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||b.updatedAt-a.updatedAt);
+  v.innerHTML=`
+    <div class="view-head"><div><h1>便利贴</h1><div class="sub">${list.length} 条记录</div></div><button class="btn" onclick="openNoteModal()">${icon('plus')}<span>新建便利贴</span></button></div>
+    <div class="notes-toolbar">
+      <div class="search">${icon('search')}<input id="noteSearch" placeholder="搜索标题、内容或标签…" value="${escapeAttr(searchQuery)}" oninput="onNoteSearch(this.value)"></div>
+    </div>
+    ${list.length?`<div class="notes-grid">${list.map(renderNoteCard).join('')}</div>`:'<div class="empty"><div class="ic">📌</div><p>还没有便利贴，点击右上角创建第一条</p></div>'}`;
+}
+function renderNoteCard(n){
+  const cls='n-color'+(n.color||1);
+  return `<div class="note ${cls}" onclick="openNoteModal('${n.id}')">
+    ${n.pinned?'<div class="pin on">📌</div>':''}
+    <div class="nt">${escapeHtml(n.title||'无标题')}</div>
+    <div class="nb">${escapeHtml(n.body||'')}</div>
+    <div class="nf">${n.tag?'<span class="chip" style="background:rgba(0,0,0,.06)">'+escapeHtml(n.tag)+'</span>':''}<span style="margin-left:auto">${fmtDate(n.updatedAt)}</span></div>
+  </div>`;
+}
+function onNoteSearch(q){searchQuery=q.trim().toLowerCase();renderNotes();const i=document.getElementById('noteSearch');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}}
+function openNoteModal(id){
+  const n=id?state.notes.find(x=>x.id===id):null;
+  const data=n||{title:'',body:'',tag:'',color:1,pinned:false};
+  openModal(`
+    <div class="sheet-head"><div class="grab"></div><h3>${n?'编辑便利贴':'新建便利贴'}</h3><button class="icon-btn" onclick="closeModal()">${icon('x')}</button></div>
+    <div class="sheet-body">
+      <div class="field"><input id="nt" placeholder="标题" value="${escapeAttr(data.title)}"></div>
+      <div class="field"><textarea id="nb" rows="6" placeholder="写点什么…" style="resize:vertical">${escapeHtml(data.body)}</textarea></div>
+      <div class="field"><input id="ng" placeholder="标签（可选）" value="${escapeAttr(data.tag)}"></div>
+      <div class="field"><label>颜色</label><div class="color-pick" id="cp">${[1,2,3,4,5,6].map(c=>`<button class="swatch${c} ${(data.color||1)==c?'active':''}" data-c="${c}"></button>`).join('')}</div></div>
+      <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="npin" ${data.pinned?'checked':''} style="width:auto"> 置顶显示</label></div>
+    </div>
+    <div class="sheet-foot">
+      ${n?`<button class="btn danger" onclick="delNote('${n.id}')">${icon('trash')}删除</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveNote(${n?`'${n.id}'`:'null'})">${icon('check')}保存</button>
+    </div>`);
+  document.querySelectorAll('#cp button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#cp button').forEach(x=>x.classList.remove('active'));b.classList.add('active');b.dataset.sel=1;});
+}
+let _noteColor=1;
+function saveNote(id){
+  const title=VAL('nt'),body=VAL('nb'),tag=VAL('ng');
+  const cpSel=document.querySelector('#cp button.active');const color=cpSel?+cpSel.dataset.c:1;
+  const pinned=document.getElementById('npin').checked;
+  if(!title.trim()&&!body.trim()){toast('标题或内容不能为空');return;}
+  if(id){const n=state.notes.find(x=>x.id===id);if(n){Object.assign(n,{title,body,tag,color,pinned,updatedAt:now()});}}
+  else{state.notes.push({id:uid(),title,body,tag,color,pinned,updatedAt:now(),createdAt:now()});}
+  saveLocal();syncCycle(true);closeModal();renderNotes();renderNav();
+}
+function delNote(id){if(!confirm('删除这条便利贴？'))return;const n=state.notes.find(x=>x.id===id);if(n){n.deletedAt=now();n.updatedAt=now();}saveLocal();syncCycle(true);closeModal();renderNotes();renderNav();}
+
+/* =========================================================
+   TODOS (KANBAN)
+========================================================= */
+const COLS=[{id:'todo',name:'待办',color:'#6a9a7a'},{id:'doing',name:'进行中',color:'#4a6a9c'},{id:'done',name:'已完成',color:'#8590a8'}];
+function renderTodos(){
+  const v=document.getElementById('view-todos');
+  v.innerHTML=`<div class="view-head"><div><h1>待办看板</h1><div class="sub">拖拽卡片或点移动按钮切换状态</div></div></div><div class="kanban" id="kanban">${COLS.map(c=>{
+    const items=state.todos.filter(t=>(t.column||'todo')===c.id&&!t.deletedAt).sort((a,b)=>(a.order||0)-(b.order||0));
+    return `<div class="col" data-col="${c.id}" ondragover="onColOver(event)" ondragleave="onColLeave(event)" ondrop="onDrop(event)">
+      <div class="col-head"><span class="cdot" style="background:${c.color}"></span><span class="ct">${c.name}</span><span class="cc">${items.length}</span></div>
+      <div class="col-body" id="col-${c.id}">${items.map(renderKCard).join('')}</div>
+      <button class="col-add" onclick="openTodoModal('${c.id}')">+ 添加到「${c.name}」</button>
+    </div>`;
+  }).join('')}</div>`;
+}
+function renderKCard(t){
+  const due=t.due?dueChip(t.due):'';
+  return `<div class="kcard" draggable="true" data-id="${t.id}" ondragstart="onDragStart(event,'${t.id}')" onclick="openTodoModal(null,'${t.id}')">
+    <div class="kt">${t.done?'<span style="text-decoration:line-through;color:var(--text-tertiary)">'+escapeHtml(t.text)+'</span>':escapeHtml(t.text)}</div>
+    <div class="kf"><span class="pri pri-${t.priority||'mid'}">${({high:'高',mid:'中',low:'低'})[t.priority||'mid']}</span>${due}</div>
+    <div class="acts">
+      <button onclick="event.stopPropagation();moveTodo('${t.id}','toggle')" title="完成/撤销">${icon('check')}</button>
+      <button onclick="event.stopPropagation();delTodo('${t.id}')" title="删除">${icon('trash')}</button>
+    </div>
+  </div>`;
+}
+function dueChip(due){const t=new Date(due+'T23:59:59');const over=t.getTime()<now()&&!due.includes(todayStr());return `<span class="due ${over?'over':''}">${due.slice(5)}</span>`;}
+let _dragId=null;
+function onDragStart(e,id){_dragId=id;e.dataTransfer.effectAllowed='move';e.target.classList.add('dragging');setTimeout(()=>e.target.classList.add('dragging'),0);}
+function onColOver(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
+function onColLeave(e){e.currentTarget.classList.remove('drag-over');}
+function onDrop(e){e.preventDefault();const col=e.currentTarget.dataset.col;e.currentTarget.classList.remove('drag-over');if(_dragId&&col){moveTodo(_dragId,col);}_dragId=null;document.querySelectorAll('.kcard.dragging').forEach(c=>c.classList.remove('dragging'));}
+function moveTodo(id,target){
+  const t=state.todos.find(x=>x.id===id);if(!t)return;
+  if(target==='toggle'){t.done=!t.done;t.column=t.done?'done':'todo';}
+  else{t.column=target;t.done=(target==='done');}
+  t.updatedAt=now();saveLocal();syncCycle(true);renderTodos();renderNav();
+}
+function openTodoModal(col,id){
+  const t=id?state.todos.find(x=>x.id===id):null;
+  const data=t||{text:'',priority:'mid',column:col||'todo',due:''};
+  openModal(`
+    <div class="sheet-head"><div class="grab"></div><h3>${t?'编辑任务':'新建任务'}</h3><button class="icon-btn" onclick="closeModal()">${icon('x')}</button></div>
+    <div class="sheet-body">
+      <div class="field"><textarea id="tt" rows="3" placeholder="任务内容…" style="resize:vertical">${escapeHtml(data.text)}</textarea></div>
+      <div class="field"><label>状态</label><div class="seg" id="segCol">${COLS.map(c=>`<button class="${(data.column||'todo')===c.id?'active':''}" data-col="${c.id}">${c.name}</button>`).join('')}</div></div>
+      <div class="field"><label>优先级</label><div class="seg" id="segPri">${['high','mid','low'].map(p=>`<button class="${(data.priority||'mid')===p?'active':''}" data-pri="${p}">${({high:'高',mid:'中',low:'低'})[p]}</button>`).join('')}</div></div>
+      <div class="field"><label>截止日期（可选）</label><input type="date" id="td" value="${data.due||''}"></div>
+    </div>
+    <div class="sheet-foot">
+      ${t?`<button class="btn danger" onclick="delTodo('${t.id}')">${icon('trash')}删除</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveTodo(${t?`'${t.id}'`:'null'})">${icon('check')}保存</button>
+    </div>`);
+  document.querySelectorAll('#segCol button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#segCol button').forEach(x=>x.classList.remove('active'));b.classList.add('active');});
+  document.querySelectorAll('#segPri button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#segPri button').forEach(x=>x.classList.remove('active'));b.classList.add('active');});
+}
+function saveTodo(id){
+  const text=VAL('tt');if(!text.trim()){toast('任务内容不能为空');return;}
+  const colBtn=document.querySelector('#segCol button.active');const priBtn=document.querySelector('#segPri button.active');
+  const column=colBtn?colBtn.dataset.col:'todo',priority=priBtn?priBtn.dataset.pri:'mid',due=VAL('td');
+  if(id){const t=state.todos.find(x=>x.id===id);if(t)Object.assign(t,{text,column,priority,due:due||undefined,done:column==='done',updatedAt:now()});}
+  else{state.todos.push({id:uid(),text,column,priority,due:due||undefined,done:column==='done',order:now(),updatedAt:now(),createdAt:now()});}
+  saveLocal();syncCycle(true);closeModal();renderTodos();renderNav();
+}
+function delTodo(id){if(!confirm('删除该任务？'))return;const t=state.todos.find(x=>x.id===id);if(t){t.deletedAt=now();t.updatedAt=now();}saveLocal();syncCycle(true);closeModal();renderTodos();renderNav();}
+
+/* =========================================================
+   CALENDAR
+========================================================= */
+function renderCalendar(){
+  const v=document.getElementById('view-calendar');
+  const y=calCursor.getFullYear(),m=calCursor.getMonth();
+  const first=new Date(y,m,1);const startDay=first.getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const prevDays=new Date(y,m,0).getDate();
+  const cells=[];
+  for(let i=startDay-1;i>=0;i--)cells.push({d:prevDays-i,other:true,date:''});
+  for(let d=1;d<=daysInMonth;d++){const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');cells.push({d,other:false,date:ds});}
+  while(cells.length%7!==0)cells.push({d:cells.length,other:true,date:''});
+  const evByDate={};state.events.filter(e=>!e.deletedAt).forEach(e=>{evByDate[e.date]=(evByDate[e.date]||0)+1;});
+  const selDay=calSelDate;
+  const selEvents=state.events.filter(e=>e.date===selDay&&!e.deletedAt).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));
+  v.innerHTML=`
+    <div class="view-head"><div><h1>日程日历</h1><div class="sub">${y}年${m+1}月</div></div><button class="btn" onclick="openEventModal('${selDay}')">${icon('plus')}<span>添加日程</span></button></div>
+    <div class="cal-wrap">
+      <div class="card" style="padding:16px">
+        <div class="cal-head">
+          <div class="mo">${y}年 ${m+1}月</div>
+          <div class="nav-btns">
+            <button onclick="calMove(-1)" style="transform:rotate(180deg)">${icon('chevron')}</button>
+            <button onclick="calMoveToday()">今</button>
+            <button onclick="calMove(1)">${icon('chevron')}</button>
+          </div>
+        </div>
+        <div class="cal-grid">
+          ${['日','一','二','三','四','五','六'].map(d=>`<div class="dw">${d}</div>`).join('')}
+          ${cells.map(c=>{if(c.other)return `<div class="cal-cell other"><div class="dn">${c.d}</div></div>`;const today=c.date===todayStr();const sel=c.date===selDay;const cnt=evByDate[c.date]||0;return `<div class="cal-cell ${today?'today':''} ${sel?'sel':''}" onclick="selDay('${c.date}')"><div class="dn">${c.d}</div><div class="ev-dots">${cnt?Array(Math.min(cnt,4)).fill('<span class="ev-dot"></span>').join(''):''}</div></div>`;}).join('')}
+        </div>
+      </div>
+      <div class="day-panel">
+        <h3>${fmtSelDay(selDay)} 的日程 ${selEvents.length?`<span style="color:var(--text-tertiary);font-weight:500;font-size:12px">(${selEvents.length})</span>`:''}</h3>
+        ${selEvents.length?selEvents.map(e=>`<div class="ev-item"><div class="ev-time">${escapeHtml(e.time||'全天')}</div><div class="ev-body" style="flex:1"><div class="et">${escapeHtml(e.title)}</div>${e.note?`<div class="en">${escapeHtml(e.note)}</div>`:''}<div style="margin-top:6px"><button class="btn ghost sm" onclick="openEventModal('${e.date}','${e.id}')">编辑</button> <button class="btn ghost sm" onclick="delEvent('${e.id}')">删除</button></div></div></div>`).join(''):'<div class="empty"><div class="ic">🗓️</div><p>这天没有日程</p></div>'}
+      </div>
+    </div>`;
+}
+function fmtSelDay(ds){if(!ds)return'';const[ y,m,d]=ds.split('-');return m+'月'+parseInt(d)+'日';}
+function selDay(date){calSelDate=date;renderCalendar();}
+function calMove(dir){calCursor.setMonth(calCursor.getMonth()+dir);renderCalendar();}
+function calMoveToday(){calCursor=new Date();calCursor.setDate(1);calSelDate=todayStr();renderCalendar();}
+function openEventModal(date,id){
+  const e=id?state.events.find(x=>x.id===id):null;
+  const data=e||{title:'',date:date||todayStr(),time:'',note:''};
+  openModal(`
+    <div class="sheet-head"><div class="grab"></div><h3>${e?'编辑日程':'新建日程'}</h3><button class="icon-btn" onclick="closeModal()">${icon('x')}</button></div>
+    <div class="sheet-body">
+      <div class="field"><input id="et" placeholder="日程标题" value="${escapeAttr(data.title)}"></div>
+      <div class="field"><label>日期</label><input type="date" id="ed" value="${data.date}"></div>
+      <div class="field"><label>时间（留空为全天）</label><input type="time" id="eti" value="${escapeAttr(data.time||'')}"></div>
+      <div class="field"><textarea id="en" rows="3" placeholder="备注（可选）" style="resize:vertical">${escapeHtml(data.note)}</textarea></div>
+    </div>
+    <div class="sheet-foot">
+      ${e?`<button class="btn danger" onclick="delEvent('${e.id}')">${icon('trash')}删除</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveEvent(${e?`'${e.id}'`:'null'})">${icon('check')}保存</button>
+    </div>`);
+}
+function saveEvent(id){
+  const title=VAL('et');if(!title.trim()){toast('请填写标题');return;}
+  const date=VAL('ed'),time=VAL('eti'),note=VAL('en');
+  if(id){const e=state.events.find(x=>x.id===id);if(e)Object.assign(e,{title,date,time:time||undefined,note,updatedAt:now()});}
+  else{state.events.push({id:uid(),title,date,time:time||undefined,note,updatedAt:now(),createdAt:now()});}
+  calSelDate=date;saveLocal();syncCycle(true);closeModal();renderCalendar();renderNav();
+}
+function delEvent(id){if(!confirm('删除该日程？'))return;const e=state.events.find(x=>x.id===id);if(e){e.deletedAt=now();e.updatedAt=now();}saveLocal();syncCycle(true);closeModal();renderCalendar();renderNav();}
+
+/* =========================================================
+   SYNC SETTINGS VIEW
+========================================================= */
+function renderSyncView(){
+  const v=document.getElementById('view-sync');
+  const on=syncCfg.enabled;
+  v.innerHTML=`
+    <div class="view-head"><div><h1>同步设置</h1><div class="sub">跨设备云端实时同步</div></div></div>
+    <div class="sync-wrap">
+      <div class="card sync-card">
+        <h3>当前状态</h3>
+        <div class="status-row"><span class="sync-dot ${on?'on':'off'}" id="svDot"></span><div><div style="font-weight:600">${on?'已开启云同步':'本地模式'}</div><div class="lbl">${on?('存储ID：'+syncCfg.binId+'<br>上次同步：'+(syncCfg.lastSync?new Date(syncCfg.lastSync).toLocaleString():'—')):'数据仅保存在本机浏览器，换设备/清缓存会丢失。开启云同步后，所有设备共享同一份数据。'}</div></div></div>
+        ${on?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="syncCycle()">${icon('sync')}立即同步</button><button class="btn ghost sm" onclick="copySyncCode()">${icon('link')}复制同步码</button><button class="btn danger sm" onclick="disconnectSync()">断开同步</button></div>`:''}
+      </div>
+      ${on?`
+      <div class="card sync-card">
+        <h3>在其他设备上同步</h3>
+        <p class="desc">在新设备的「同步设置」里粘贴你的 Master Key 和下面的存储ID，即可拉取同一份数据并开始实时同步。</p>
+        <div class="field"><label>云端存储ID（同步码）</label><div class="sync-code-box" id="codeBox">${syncCfg.binId}</div></div>
+        <button class="btn ghost sm" onclick="copySyncCode()">${icon('download')}复制存储ID</button>
+      </div>`:`
+      <div class="card sync-card">
+        <h3>开启云同步</h3>
+        <p class="desc">使用 <a href="https://jsonbin.io" target="_blank" style="color:var(--accent)">jsonbin.io</a> 作为云端存储后端（免费）。数据加密私享、CORS 可直接由浏览器调用。</p>
+        <ol class="steps">
+          <li>打开 <a href="https://jsonbin.io" target="_blank">jsonbin.io</a> 免费注册（邮箱即可）</li>
+          <li>登录后进入 <a href="https://jsonbin.io/api-keys" target="_blank">API Keys</a> 页面，复制你的 <code>X-Master-Key</code></li>
+          <li>粘贴到下方，点击「开启并创建」</li>
+        </ol>
+        <div class="field"><label>jsonbin Master Key（以 $2a$ 开头）</label><input id="mk" type="password" placeholder="$2a$10$……"></div>
+        <button class="btn" onclick="doEnableSync()">${icon('sync')}开启并创建云端存储</button>
+      </div>
+      <div class="card sync-card">
+        <h3>已有云端存储？连接已有</h3>
+        <p class="desc">从你的另一台设备复制存储ID，在此连接。</p>
+        <div class="field"><label>Master Key</label><input id="mk2" type="password" placeholder="$2a$10$……"></div>
+        <div class="field"><label>存储ID</label><input id="bid2" placeholder="云端存储ID"></div>
+        <button class="btn ghost" onclick="doConnectExisting()">${icon('link')}连接</button>
+      </div>`}
+      <div class="card sync-card">
+        <h3>关于同步机制</h3>
+        <p class="desc">· 本机改动会自动推送到云端（防抖2秒），并每 8 秒拉取一次其他设备的更新。<br>· 冲突按「每条记录的最后修改时间」合并（后改的覆盖先改的）。<br>· 删除会同步到所有设备（软删除）。<br>· 离线时正常使用本地数据，联网后自动同步。<br>· Master Key 仅保存在本机浏览器，不会上传给任何第三方。</p>
+      </div>
+    </div>`;
+}
+async function doEnableSync(){const k=VAL('mk');if(!k.trim()){toast('请填入 Master Key');return;}try{await enableSync(k.trim());}catch(e){}}
+async function doConnectExisting(){const k=VAL('mk2'),b=VAL('bid2');if(!k.trim()||!b.trim()){toast('请填入 Key 和 存储ID');return;}await connectExisting(k.trim(),b.trim());}
+function copySyncCode(){
+  if(!syncCfg.binId)return;
+  navigator.clipboard.writeText(syncCfg.binId)
+    .then(()=>toast('存储ID已复制 ✓'))
+    .catch(()=>{
+      const box=document.getElementById('codeBox');
+      if(box){const r=document.createRange();r.selectNode(box);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);}
+      toast('请手动选中复制');
+    });
+}
+
+/* =========================================================
+   MODAL + utils
+========================================================= */
+function openModal(inner,center){
+  const root=document.getElementById('modalRoot');
+  document.getElementById('modalSheet').innerHTML=inner;
+  root.classList.add('open');root.classList.toggle('center',!!center);
+  document.body.classList.add('locked');
+}
+function closeModal(){const root=document.getElementById('modalRoot');root.classList.remove('open');document.body.classList.remove('locked');document.getElementById('modalSheet').innerHTML='';}
+function VAL(id){const el=document.getElementById(id);return el?el.value:'';}
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeAttr(s){return escapeHtml(s).replace(/`/g,'&#96;');}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+function renderAll(){renderNav();if(curView==='dashboard')renderDashboard();if(curView==='notes')renderNotes();if(curView==='todos')renderTodos();if(curView==='calendar')renderCalendar();if(curView==='sync')renderSyncView();}
+
+// seed demo data on first run
+function seedIfEmpty(){
+  if(state.notes.length||state.todos.length||state.events.length)return;
+  const t=now();
+  state.notes=[
+    {id:uid(),title:'欢迎使用云记事板',body:'这是一个跨设备同步的便利贴+待办+日程应用。\n\n· 点击右上角「新建」创建便利贴\n· 在「待办看板」拖拽任务\n· 在「日程日历」点日期添加日程\n· 在「同步设置」开启云端同步',tag:'指南',color:1,pinned:true,updatedAt:t,createdAt:t},
+    {id:uid(),title:'购物清单',body:'牛奶\n面包\n鸡蛋\n咖啡豆',tag:'生活',color:2,pinned:false,updatedAt:t,createdAt:t}
+  ];
+  state.todos=[
+    {id:uid(),text:'体验便利贴与待办看板',priority:'high',column:'doing',done:false,order:1,updatedAt:t,createdAt:t},
+    {id:uid(),text:'开启云同步，多设备共享',priority:'mid',column:'todo',done:false,order:2,updatedAt:t,createdAt:t},
+    {id:uid(),text:'阅读同步说明',priority:'low',column:'done',done:true,order:3,updatedAt:t,createdAt:t}
+  ];
+  state.events=[
+    {id:uid(),title:'每日回顾',date:todayStr(),time:'21:00',note:'整理今日便利贴与明日待办',updatedAt:t,createdAt:t}
+  ];
+  saveLocal();
+}
+
+/* =========================================================
+   INIT
+========================================================= */
+(function init(){
+  loadLocal();
+  seedIfEmpty();
+  renderNav();
+  switchView('dashboard');
+  if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
+  // push on any save via custom event is handled inline; ensure periodic sync
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+  // close drawer on resize to desktop
+  window.addEventListener('resize',()=>{if(window.innerWidth>900)toggleDrawer(false);});
+})();
+</script>
+</body>
+</html>
