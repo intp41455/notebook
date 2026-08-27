@@ -188,7 +188,23 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 .ev-body .et{font-size:13px;font-weight:600}
 .ev-body .en{font-size:12px;color:var(--text-secondary);margin-top:2px}
 
-/* ============ SYNC SETTINGS ============ */
+/* ============ EXPORT VIEW ============ */
+.exp-wrap{max-width:800px}
+.exp-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.exp-header h1{margin:0;font-size:22px;font-weight:700}
+.week-pick{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.week-pick input[type=date]{padding:9px 12px;border:1px solid var(--border-input);border-radius:var(--radius-tile);background:var(--surface-nested);font-size:13px;outline:none}
+.week-pick input[type=date]:focus{border-color:var(--accent);background:#fff}
+.exp-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.exp-tab{padding:8px 16px;border-radius:var(--radius-tile);font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--surface-card);cursor:pointer;transition:.15s}
+.exp-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.exp-preview{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);padding:24px;min-height:200px;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.7;overflow:auto;max-height:60vh}
+.exp-preview h1,.exp-preview h2,.exp-preview h3{margin-top:0;color:var(--text)}
+.exp-preview ul{padding-left:20px}
+.exp-preview li{margin:4px 0}
+.exp-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.empty-exp{padding:48px 20px;text-align:center;color:var(--text-tertiary)}
+.empty-exp .ic{font-size:34px;margin-bottom:10px;opacity:.7}
 .sync-wrap{max-width:680px}
 .sync-card{padding:22px;margin-bottom:16px}
 .sync-card h3{margin:0 0 6px;font-size:16px;font-weight:700}
@@ -306,6 +322,8 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
       <section class="view" id="view-calendar"></section>
       <!-- SYNC -->
       <section class="view" id="view-sync"></section>
+      <!-- EXPORT -->
+      <section class="view" id="view-export"></section>
     </div>
   </div>
 </div>
@@ -330,7 +348,8 @@ const ICONS={
   notes:'<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h6"/>',
   kanban:'<rect x="3" y="3" width="6" height="14" rx="1"/><rect x="11" y="3" width="6" height="9" rx="1"/><rect x="19" y="3" width="2" height="6" rx="1"/>',
   calendar:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
-  sync:'<path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3"/><path d="M21 4v5h-5M3 20v-5h5"/>',
+  sync:'<path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1-6.7 3"/><path d="M21 4v5h-5M3 20v-5h5"/>',
+  export:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   check:'<path d="M20 6L9 17l-5-5"/>',
   trash:'<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
@@ -345,6 +364,9 @@ const ICONS={
   book:'<path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M4 18a2 2 0 0 1 2-2h12"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   download:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  'chevron-left':'<polyline points="15 18 9 12 15 6"/>',
+  'chevron-right':'<polyline points="9 18 15 12 9 6"/>',
   link:'<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
 };
 function icon(n){return '<span class="ico"><svg viewBox="0 0 24 24">'+(ICONS[n]||ICONS.dashboard)+'</svg></span>';}
@@ -532,7 +554,7 @@ function getBadge(id){
   if(id==='calendar')return state.events.filter(e=>e.date===todayStr()&&!e.deletedAt).length||'';
   return '';
 }
-const TITLES={dashboard:'仪表盘',notes:'便利贴',todos:'待办看板',calendar:'日程日历',sync:'同步设置'};
+const TITLES={dashboard:'仪表盘',notes:'便利贴',todos:'待办看板',calendar:'日程日历',sync:'同步设置',export:'导出周报'};
 function switchView(id){
   if(!NAV.find(n=>n.id===id))id='dashboard';
   curView=id;
@@ -546,6 +568,7 @@ function switchView(id){
   if(id==='todos')renderTodos();
   if(id==='calendar')renderCalendar();
   if(id==='sync')renderSyncView();
+  if(id==='export')renderExportView();
   // FAB visibility (mobile only — desktop uses header buttons)
   const fab=document.getElementById('fab');
   if(id==='sync'||id==='dashboard'||window.innerWidth>900){fab.style.display='none';}else{fab.style.display='flex';}
@@ -792,6 +815,205 @@ function saveEvent(id){
 function delEvent(id){if(!confirm('删除该日程？'))return;const e=state.events.find(x=>x.id===id);if(e){e.deletedAt=now();e.updatedAt=now();}saveLocal();syncCycle(true);closeModal();renderCalendar();renderNav();}
 
 /* =========================================================
+   EXPORT VIEW
+========================================================= */
+let expWeekStart, expWeekEnd, expFormat='md', expDirty=false;
+
+function getWeekStart(d){
+  const dt=new Date(d);
+  const day=dt.getDay()||7; // 1=Mon .. 7=Sun
+  dt.setDate(dt.getDate()-day+1);
+  dt.setHours(0,0,0,0);
+  return dt;
+}
+function getWeekEnd(d){
+  const s=getWeekStart(d);
+  const e=new Date(s);
+  e.setDate(e.getDate()+6);
+  e.setHours(23,59,59,999);
+  return e;
+}
+function fmtDate(d){return d.toISOString().slice(0,10);}
+function fmtDateCN(d){return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';}
+function filterByWeek(items, start, end){
+  return items.filter(it=>{
+    const s=new Date(it.createdAt||it.updatedAt);
+    return s>=start&&s<=end;
+  }).sort((a,b)=>new Date(a.updatedAt)-new Date(b.updatedAt));
+}
+function mdColor(c){
+  const map={1:'🟦',2:'🟩',3:'🟨',4:'🟧',5:'🟪',6:'🟥'};
+  return map[c]||'⬜';
+}
+function mdPriority(p){return p==='high'?'🔴高':p==='mid'?'🟡中':'🟢低';}
+
+function genMarkdown(start,end){
+  const notes=filterByWeek(state.notes,start,end);
+  const todos=filterByWeek(state.todos,start,end);
+  const events=filterByWeek(state.events,start,end);
+  let s=`# 周报 ${fmtDateCN(start)} ~ ${fmtDateCN(end)}\n\n`;
+  s+=`> 生成时间：${new Date().toLocaleString('zh-CN')}\n\n`;
+
+  s+=`---\n\n`;
+  s+=`## 📌 日程（${events.length}条）\n\n`;
+  if(events.length===0) s+='_本周无日程记录_ \n\n';
+  else events.forEach(ev=>{
+    s+=`- **${fmtDateCN(new Date(ev.date))}** ${ev.time?'['+ev.time+']':''} ${ev.title}\n`;
+    if(ev.note) s+=`  _${ev.note}_\n`;
+  });
+  s+=`\n`;
+
+  s+=`---\n\n`;
+  s+=`## ✅ 待办事项（本周完成/创建 ${todos.length}条）\n\n`;
+  if(todos.length===0) s+='_本周无待办变动_ \n\n';
+  else todos.forEach((td,i)=>{
+    const mark=td.column==='done'?'[x]':'[ ]';
+    s+=`${i+1}. ${mark} **${td.text}** ${mdPriority(td.priority)} ${td.due?'·截止：'+td.due:''}\n`;
+    if(td.column==='done'&&td.done)s+=`   _✓ 已完成_\n`;
+  });
+  s+=`\n`;
+
+  s+=`---\n\n`;
+  s+=`## 📝 便利贴（${notes.length}条）\n\n`;
+  if(notes.length===0) s+='_本周无便利贴记录_ \n\n';
+  else notes.forEach(nt=>{
+    s+=`### ${mdColor(nt.color)} ${nt.title||'(无标题)'}\n\n`;
+    s+=`${(nt.body||'').split('\n').map(l=>'- '+l).join('\n')}\n\n`;
+    if(nt.tag)s+=`**标签：** ${nt.tag}  `;
+    s+=`**更新时间：** ${new Date(nt.updatedAt).toLocaleString('zh-CN')}\n\n`;
+    s+=`---\n\n`;
+  });
+
+  s+=`*由「云记事板」自动生成*\n`;
+  return s;
+}
+
+function genHTML(start,end){
+  const notes=filterByWeek(state.notes,start,end);
+  const todos=filterByWeek(state.todos,start,end);
+  const events=filterByWeek(state.events,start,end);
+  const today=new Date().toLocaleString('zh-CN');
+  let h=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>周报 ${fmtDateCN(start)} ~ ${fmtDateCN(end)}</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#1a1f2e;background:#fff;}
+h1{font-size:22px;border-bottom:2px solid #2c4a7c;padding-bottom:10px;}h2{font-size:17px;color:#2c4a7c;margin-top:32px;}h3{font-size:15px;margin:12px 0 4px;}
+.meta{color:#8590a8;font-size:13px;margin-bottom:24px;}hr{border:none;border-top:#e1e6f0;margin:28px 0;}
+ul{padding-left:20px;}li{margin:6px 0;line-height:1.6;}
+.tag{display:inline-block;background:#e8eef7;color:#2c4a7c;border-radius:4px;padding:1px 8px;font-size:12px;margin-right:6px;}
+.done{text-decoration:line-through;color:#8590a8;}
+.epilog{text-align:center;color:#8590a8;font-size:12px;margin-top:40px;}</style></head><body>
+<h1>📋 周报 ${fmtDateCN(start)} ~ ${fmtDateCN(end)}</h1>
+<div class="meta">生成时间：${today}</div>`;
+
+  h+=`<h2>📌 日程（${events.length}条）</h2><ul>`;
+  if(!events.length)h+=`<li>本周无日程记录</li>`;
+  events.forEach(ev=>{h+=`<li><strong>${fmtDateCN(new Date(ev.date))}</strong> ${ev.time?'['+ev.time+']':''} ${ev.title}${ev.note?' <em>'+escapeHtml(ev.note)+'</em>':''}</li>`;});
+  h+=`</ul><hr>`;
+
+  h+=`<h2>✅ 待办（${todos.length}条）</h2><ul>`;
+  if(!todos.length)h+=`<li>本周无待办变动</li>`;
+  todos.forEach(td=>{const c=td.column==='done'?'done':'';h+=`<li class="${c}">${td.done?'✓ ':'· '} <strong>${escapeHtml(td.text)}</strong> ${td.due?'· 截止：'+td.due:''}</li>`;});
+  h+=`</ul><hr>`;
+
+  h+=`<h2>📝 便利贴（${notes.length}条）</h2>`;
+  if(!notes.length)h+=`<p>本周无便利贴记录</p>`;
+  notes.forEach(nt=>{
+    h+=`<h3>${nt.title||'(无标题)'}</h3><p style="margin:4px 0;color:#5a6378;line-height:1.7;white-space:pre-wrap">${escapeHtml(nt.body||'')}</p>`;
+    if(nt.tag)h+=`<span class="tag">${escapeHtml(nt.tag)}</span>`;
+    h+=`<span style="font-size:12px;color:#8590a8">更新时间：${new Date(nt.updatedAt).toLocaleString('zh-CN')}</span><hr>`;
+  });
+
+  h+=`<div class="epilog">由「云记事板」自动生成</div></body></html>`;
+  return h;
+}
+
+function genText(start,end){
+  return genMarkdown(start,end).replace(/</g,'').replace(/>/g,'');
+}
+
+function renderExportView(){
+  const now=new Date();
+  if(!expWeekStart){expWeekStart=getWeekStart(now);expWeekEnd=getWeekEnd(now);}
+  const v=document.getElementById('view-export');
+  v.innerHTML=`
+    <div class="exp-wrap">
+      <div class="exp-header"><div><h1>导出周报</h1><div class="sub">按周汇总便利贴、待办、日程，生成文档</div></div></div>
+      <div class="week-pick">
+        <button class="btn ghost sm" onclick="pickWeek(-1)">${icon('chevron-left')} 上一周</button>
+        <div style="font-weight:600;min-width:200px;text-align:center;font-size:14px" id="weekLabel">${fmtDateCN(expWeekStart)} ~ ${fmtDateCN(expWeekEnd)}</div>
+        <button class="btn ghost sm" onclick="pickWeek(1)">${icon('chevron-right')} 下一周</button>
+        <button class="btn sm" onclick="pickWeek(0)">${icon('calendar')} 本周</button>
+      </div>
+      <div class="week-pick">
+        <label style="font-size:13px;font-weight:600">起始日期</label>
+        <input type="date" id="expStart" value="${fmtDate(expWeekStart)}" onchange="onExpDateChange()">
+        <label style="font-size:13px;font-weight:600">结束日期</label>
+        <input type="date" id="expEnd" value="${fmtDate(expWeekEnd)}" onchange="onExpDateChange()">
+      </div>
+      <div class="exp-tabs">
+        <button class="exp-tab ${expFormat==='md'?'active':''}" onclick="switchExpFmt('md')">Markdown</button>
+        <button class="exp-tab ${expFormat==='html'?'active':''}" onclick="switchExpFmt('html')">HTML</button>
+        <button class="exp-tab ${expFormat==='txt'?'active':''}" onclick="switchExpFmt('txt')">纯文本</button>
+      </div>
+      <div class="exp-preview" id="expPreview"></div>
+      <div class="exp-actions">
+        <button class="btn" onclick="downloadExp()">${icon('download')} 下载文档</button>
+        <button class="btn ghost" onclick="copyExp()">${icon('copy')} 复制内容</button>
+      </div>
+    </div>`;
+  refreshPreview();
+}
+function pickWeek(dir){
+  if(dir===0){expWeekStart=getWeekStart(new Date());expWeekEnd=getWeekEnd(new Date());}
+  else{const d=new Date(expWeekStart);d.setDate(d.getDate()+dir*7);expWeekStart=getWeekStart(d);expWeekEnd=getWeekEnd(d);}
+  document.getElementById('expStart').value=fmtDate(expWeekStart);
+  document.getElementById('expEnd').value=fmtDate(expWeekEnd);
+  document.getElementById('weekLabel').textContent=fmtDateCN(expWeekStart)+' ~ '+fmtDateCN(expWeekEnd);
+  expDirty=true;
+  refreshPreview();
+}
+function onExpDateChange(){
+  expWeekStart=new Date(VAL('expStart'));expWeekEnd=new Date(VAL('expEnd'));
+  document.getElementById('weekLabel').textContent=fmtDateCN(expWeekStart)+' ~ '+fmtDateCN(expWeekEnd);
+  expDirty=true;refreshPreview();
+}
+function switchExpFmt(f){expFormat=f;expDirty=true;
+  document.querySelectorAll('.exp-tab').forEach(t=>{t.classList.remove('active');if(t.textContent.trim()==={md:'Markdown',html:'HTML',txt:'纯文本'}[f])t.classList.add('active');});refreshPreview();
+}
+function refreshPreview(){
+  const el=document.getElementById('expPreview');
+  if(!el)return;
+  let content;
+  if(expFormat==='md')content=genMarkdown(expWeekStart,expWeekEnd);
+  else if(expFormat==='html')content=genHTML(expWeekStart,expWeekEnd);
+  else content=genText(expWeekStart,expWeekEnd);
+  if(expFormat==='html'){
+    el.innerHTML=content;
+  }else{
+    el.textContent=content;
+    el.className='exp-preview';
+  }
+}
+function downloadExp(){
+  const content=expFormat==='html'?genHTML(expWeekStart,expWeekEnd):expFormat==='md'?genMarkdown(expWeekStart,expWeekEnd):genText(expWeekStart,expWeekEnd);
+  const ext=expFormat==='html'?'html':expFormat==='md'?'md':'txt';
+  const mime=expFormat==='html'?'text/html':'text/plain';
+  const blob=new Blob([content],{type:mime+';charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`周报_${fmtDate(expWeekStart)}_${fmtDate(expWeekEnd)}.${ext}`;
+  a.click();URL.revokeObjectURL(a.href);
+  toast('已下载 ✓');
+}
+function copyExp(){
+  const content=expFormat==='html'?genHTML(expWeekStart,expWeekEnd):expFormat==='md'?genMarkdown(expWeekStart,expWeekEnd):genText(expWeekStart,expWeekEnd);
+  navigator.clipboard.writeText(content)
+    .then(()=>toast('已复制到剪贴板 ✓'))
+    .catch(()=>{
+      const ta=document.createElement('textarea');ta.value=content;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('已复制 ✓');
+    });
+}
+
+/* =========================================================
    SYNC SETTINGS VIEW
 ========================================================= */
 function renderSyncView(){
@@ -863,7 +1085,7 @@ function VAL(id){const el=document.getElementById(id);return el?el.value:'';}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function escapeAttr(s){return escapeHtml(s).replace(/`/g,'&#96;');}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
-function renderAll(){renderNav();if(curView==='dashboard')renderDashboard();if(curView==='notes')renderNotes();if(curView==='todos')renderTodos();if(curView==='calendar')renderCalendar();if(curView==='sync')renderSyncView();}
+function renderAll(){renderNav();if(curView==='dashboard')renderDashboard();if(curView==='notes')renderNotes();if(curView==='todos')renderTodos();if(curView==='calendar')renderCalendar();if(curView==='sync')renderSyncView();if(curView==='export')renderExportView();}
 
 // seed demo data on first run
 function seedIfEmpty(){
