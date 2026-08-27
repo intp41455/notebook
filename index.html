@@ -537,7 +537,8 @@ const NAV=[
   {id:'notes',icon:'notes',name:'便利贴'},
   {id:'todos',icon:'kanban',name:'待办看板'},
   {id:'calendar',icon:'calendar',name:'日程日历'},
-  {id:'sync',icon:'sync',name:'同步设置'}
+  {id:'sync',icon:'sync',name:'同步设置'},
+  {id:'export',icon:'export',name:'导出周报'}
 ];
 function renderNav(){
   const nav=document.getElementById('nav');
@@ -546,7 +547,8 @@ function renderNav(){
   // tabbar (top 4)
   const tb=document.getElementById('tabbarInner');
   tb.innerHTML=NAV.slice(0,4).map(n=>`<button class="tab ${n.id===curView?'active':''}" data-tab="${n.id}">${icon(n.icon)}<span>${n.name}</span></button>`).join('')
-    +`<button class="tab ${curView==='sync'?'active':''}" data-tab="sync">${icon('sync')}<span>设置</span></button>`;
+    +`<button class="tab ${curView==='sync'?'active':''}" data-tab="sync">${icon('sync')}<span>设置</span></button>`
+    +`<button class="tab ${curView==='export'?'active':''}" data-tab="export">${icon('export')}<span>导出</span></button>`;
   tb.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchView(b.dataset.tab));
 }
 function getBadge(id){
