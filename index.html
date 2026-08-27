@@ -73,7 +73,10 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 .topbar .menu-btn:hover{background:var(--surface-nested)}
 .topbar .menu-btn svg{width:22px;height:22px;stroke:var(--text);fill:none;stroke-width:1.8;stroke-linecap:round}
 .topbar .title{font-size:16px;font-weight:600}
-.topbar .sp{margin-left:auto}
+.topbar .sp{margin-left:auto;display:flex;align-items:center;gap:4px}
+.topbar .top-btn{width:34px;height:34px;border-radius:var(--radius-tile);display:grid;place-items:center}
+.topbar .top-btn:hover{background:var(--surface-nested)}
+.topbar .top-btn svg{width:18px;height:18px;stroke:var(--text);fill:none;stroke-width:1.8;stroke-linecap:round}
 
 .content{flex:1;overflow-y:auto;padding:26px 30px 40px;scroll-behavior:smooth}
 .content.compact{padding:18px 18px 30px}
@@ -314,6 +317,10 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 .float-ftr{padding:8px 14px;border-top:1px solid var(--border-light);flex-shrink:0}
 @media(max-width:520px){.float-widget{right:10px;left:10px;width:auto;bottom:80px}.float-btn{bottom:72px}.float-hd{cursor:default}}
 @media(min-width:901px){.float-btn{bottom:24px}.float-body{max-height:60vh}}
+/* fullscreen mode */
+.fullscreen-mode .sidebar,.fullscreen-mode .tabbar,.fullscreen-mode .float-btn{display:none!important}
+.fullscreen-mode .main{width:100vw;height:100vh;overflow:hidden}
+.fullscreen-mode .content{padding:20px 28px}
 </style>
 </head>
 <body>
@@ -336,6 +343,9 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
     <div class="topbar">
       <button class="menu-btn" onclick="toggleDrawer(true)" aria-label="菜单"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
       <div class="title" id="topTitle">仪表盘</div>
+      <div class="sp">
+        <button class="top-btn" id="fsBtn" onclick="toggleFullscreen()" title="全屏显示 (F11)">${icon('fullscreen')}</button>
+      </div>
     </div>
     <div class="content" id="content">
       <!-- DASHBOARD -->
@@ -409,7 +419,8 @@ const ICONS={
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   'chevron-left':'<polyline points="15 18 9 12 15 6"/>',
   'chevron-right':'<polyline points="9 18 15 12 9 6"/>',
-  link:'<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'
+  link:'<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0  -7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+  fullscreen:'<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>'
 };
 function icon(n){return '<span class="ico"><svg viewBox="0 0 24 24">'+(ICONS[n]||ICONS.dashboard)+'</svg></span>';}
 
@@ -1171,8 +1182,13 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   }
   if(fp.minimized){_floatMinimized=true;floatW.classList.remove('open');}
   switchView('dashboard');
+  updateFsBtn();
   if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){if(document.fullscreenElement){document.exitFullscreen?.();}else{closeModal();}}
+    if(e.key==='F11'){e.preventDefault();toggleFullscreen();}
+  });
+  document.addEventListener('fullscreenchange',()=>{document.body.classList.toggle('fullscreen-mode',!!document.fullscreenElement);updateFsBtn();});
   window.addEventListener('resize',()=>{if(window.innerWidth>900)toggleDrawer(false);});
   // PWA install prompt button
   if(pwaPrompt){
@@ -1182,8 +1198,32 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
     Object.assign(tip.style,{position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',background:'var(--surface-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-card)',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'var(--shadow-overlay)',zIndex:'999',fontSize:'13px',whiteSpace:'nowrap'});
     document.body.appendChild(tip);
   }
+  // auto-start guide: show hint if PWA is installed but not in standalone mode
+  const isPwaInstalled=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
+  if(isPwaInstalled&&!pwaPrompt){
+    const ast=document.createElement('div');
+    ast.id='astTip';
+    ast.innerHTML=`<span>🖥️ 记事板已安装 · 在浏览器设置中开启「启动时打开」即可开机自启</span><button class="btn ghost sm" onclick="this.parentElement.remove()">知道了</button>`;
+    Object.assign(ast.style,{position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',background:'var(--accent)',color:'#fff',border:'none',borderRadius:'var(--radius-card)',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'var(--shadow-overlay)',zIndex:'999',fontSize:'13px',whiteSpace:'nowrap'});
+    ast.querySelector('button').style.color='#fff';ast.querySelector('button').style.border='1px solid rgba(255,255,255,.3)';
+    document.body.appendChild(ast);
+  }
 })();
 function doInstall(){if(!pwaPrompt)return;pwaPrompt.prompt();pwaPrompt.userChoice.then(()=>{const t=document.getElementById('pwaTip');if(t)t.remove();});}
+/* fullscreen */
+function toggleFullscreen(){
+  if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()||document.documentElement.webkitRequestFullscreen?.();}
+  else{document.exitFullscreen?.()||document.webkitExitFullscreen?.();}
+}
+function updateFsBtn(){
+  const b=document.getElementById('fsBtn');
+  if(!b)return;
+  const inFs=!!document.fullscreenElement;
+  b.innerHTML=inFs?icon('fullscreen_exit'):icon('fullscreen');
+  b.title=inFs?'退出全屏 (F11)':'全屏显示 (F11)';
+}
+// fullscreen exit icon: arrows pointing inward
+ICONS.fullscreen_exit='<path d="M8 3v5H3M21 3h-5v5M3 21h5v-5M21 21h-5v5"/><path d="M3 8h5M16 3h5M3 16h5M16 21h5"/>';
 
 /* floating widget */
 let _floatMinimized=false;
