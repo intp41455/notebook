@@ -269,6 +269,20 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);background:var(--drawer-bg);color:#fff;padding:11px 18px;border-radius:var(--radius-tile);font-size:13px;z-index:200;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-overlay)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* setup guide */
+.setup-guide{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;pointer-events:none;transition:.3s}
+.setup-guide.show{opacity:1;pointer-events:auto}
+.setup-card{background:var(--surface-card);border-radius:16px;padding:24px;max-width:480px;width:90%;box-shadow:var(--shadow-overlay);transform:translateY(20px);transition:.3s}
+.setup-guide.show .setup-card{transform:translateY(0)}
+.setup-card h3{margin:0 0 4px;font-size:18px;color:var(--text)}
+.setup-card .subtitle{margin:0 0 16px;font-size:13px;color:var(--text-muted)}
+.setup-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;padding:10px 12px;background:var(--surface-nested);border-radius:8px;font-size:13px;line-height:1.5;color:var(--text)}
+.setup-step .num{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;margin-top:1px}
+.setup-step code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px;color:var(--accent)}
+.setup-card .btn-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.setup-close{position:absolute;top:12px;right:12px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:4px}
+.setup-close:hover{color:var(--text)}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width:900px){
   .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .26s cubic-bezier(.2,.8,.2,1);box-shadow:var(--shadow-overlay)}
@@ -390,6 +404,18 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
   <div class="sheet" id="modalSheet"></div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="setup-guide" id="setupGuide">
+  <div class="setup-card" style="position:relative">
+    <button class="setup-close" onclick="closeSetup()">×</button>
+    <h3>🚀 记事板 · 首次使用向导</h3>
+    <p class="subtitle" id="setupSubtitle">让记事板像桌面应用一样随时可用</p>
+    <div id="setupSteps"></div>
+    <div class="btn-row">
+      <button class="btn ghost sm" onclick="closeSetup()">稍后设置</button>
+      <button class="btn sm" id="setupNextBtn" onclick="setupNext()">下一步</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* =========================================================
@@ -1185,31 +1211,84 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   updateFsBtn();
   if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
   document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'){if(document.fullscreenElement){document.exitFullscreen?.();}else{closeModal();}}
+    if(e.key==='Escape'){if(document.fullscreenElement){document.exitFullscreen?.();}else if(document.getElementById('setupGuide').classList.contains('show')){closeSetup();}else{closeModal();}}
     if(e.key==='F11'){e.preventDefault();toggleFullscreen();}
   });
   document.addEventListener('fullscreenchange',()=>{document.body.classList.toggle('fullscreen-mode',!!document.fullscreenElement);updateFsBtn();});
   window.addEventListener('resize',()=>{if(window.innerWidth>900)toggleDrawer(false);});
-  // PWA install prompt button
-  if(pwaPrompt){
-    const tip=document.createElement('div');
-    tip.id='pwaTip';
-    tip.innerHTML=`<span>将记事板固定到桌面，随时使用</span><button class="btn sm" onclick="doInstall()">添加</button><button class="btn ghost sm" onclick="this.parentElement.remove()">暂不</button>`;
-    Object.assign(tip.style,{position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',background:'var(--surface-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-card)',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'var(--shadow-overlay)',zIndex:'999',fontSize:'13px',whiteSpace:'nowrap'});
-    document.body.appendChild(tip);
-  }
-  // auto-start guide: show hint if PWA is installed but not in standalone mode
-  const isPwaInstalled=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
-  if(isPwaInstalled&&!pwaPrompt){
-    const ast=document.createElement('div');
-    ast.id='astTip';
-    ast.innerHTML=`<span>🖥️ 记事板已安装 · 在浏览器设置中开启「启动时打开」即可开机自启</span><button class="btn ghost sm" onclick="this.parentElement.remove()">知道了</button>`;
-    Object.assign(ast.style,{position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',background:'var(--accent)',color:'#fff',border:'none',borderRadius:'var(--radius-card)',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'var(--shadow-overlay)',zIndex:'999',fontSize:'13px',whiteSpace:'nowrap'});
-    ast.querySelector('button').style.color='#fff';ast.querySelector('button').style.border='1px solid rgba(255,255,255,.3)';
-    document.body.appendChild(ast);
+
+  // session tracking: detect fresh browser launch
+  const SESS_KEY='cw_sess_v1';
+  const wasFresh=!sessionStorage.getItem(SESS_KEY);
+  sessionStorage.setItem(SESS_KEY,'1');
+  localStorage.setItem('cw_last_open',Date.now().toString());
+
+  // show setup guide on first visit or if setup not yet completed (v2)
+  const setupDone=localStorage.getItem('cw_setup_done_v2')||localStorage.getItem('cw_setup_done');
+  if(!setupDone){
+    setTimeout(()=>showSetupGuide(),600);
+  }else if(wasFresh){
+    // welcome back notification
+    const lastOpen=parseInt(localStorage.getItem('cw_last_open')||'0');
+    const diffMin=Math.round((Date.now()-lastOpen)/60000);
+    if(diffMin>5){
+      setTimeout(()=>toast('欢迎回来 · 悬浮窗已从上次位置恢复'),1200);
+    }
   }
 })();
-function doInstall(){if(!pwaPrompt)return;pwaPrompt.prompt();pwaPrompt.userChoice.then(()=>{const t=document.getElementById('pwaTip');if(t)t.remove();});}
+function doInstall(){if(!pwaPrompt)return;pwaPrompt.prompt();pwaPrompt.userChoice.then(()=>{closeSetup();});}
+function closeSetup(){document.getElementById('setupGuide').classList.remove('show');}
+function setupNext(){
+  const step=parseInt(localStorage.getItem('cw_setup_step')||'0');
+  if(step<2){
+    localStorage.setItem('cw_setup_step',(step+1).toString());
+    renderSetupStep(step+1);
+  }else{
+    localStorage.setItem('cw_setup_done_v2','1');
+    localStorage.removeItem('cw_setup_done');
+    closeSetup();
+    toast('设置完成 · 悬浮窗将自动恢复');
+  }
+}
+function showSetupGuide(){renderSetupStep(parseInt(localStorage.getItem('cw_setup_step')||'0'));}
+function renderSetupStep(step){
+  const isPwa=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
+  const ua=navigator.userAgent;
+  const isWin=ua.includes('Windows');
+  const isMac=ua.includes('Mac');
+  const isChrome=ua.includes('Chrome')&&!ua.includes('Edg');
+  const isEdge=ua.includes('Edg');
+  const isSafari=ua.includes('Safari')&&!ua.includes('Chrome')&&!ua.includes('Edg');
+  const steps=[
+    {title:'安装记事板到桌面',
+     subtitle:'让记事板像原生应用一样独立运行，不依赖浏览器标签页',
+     items:[
+       {text:(isWin?'<strong>Chrome/Edge 安装：</strong>点击浏览器地址栏右侧「安装」图标（或菜单⋮→<code>安装记事板</code>）':''),icon:(isWin?'🪟':'🍎')},
+       {text:'安装后记事板会以独立窗口打开，可拖到任务栏固定',icon:'📌'},
+       {text:(isWin?'<strong>一键开机自启：</strong>按 <code>Win+R</code> → 输入 <code>shell:startup</code> → 回车 → 把记事板快捷方式拖进去':''),icon:'⚡'},
+       {text:'如果是 Mac：<code>系统设置 → 通用 → 登录项 → 添加记事板</code>',icon:'🍎'},
+     ]},
+    {title:'确认已安装',
+     subtitle:`${isPwa?'✅ 已检测到记事板以独立模式运行':'⚠️ 尚未检测到 PWA 安装'},请确认上一步已完成`,
+     items:[
+       {text:(isPwa?'记事板已作为独立应用运行，关闭窗口后仍可拖出悬浮窗':'安装完成后请重新打开此页面，向导将自动完成'),icon:(isPwa?'✅':'👉')},
+       {text:'即使浏览器关闭，悬浮窗的位置和展开状态也已保存，下次打开自动恢复',icon:'💾'},
+     ]},
+    {title:'搞定！开始使用',
+     subtitle:'记事板现已配置完成，享受你的高效工作流',
+     items:[
+       {text:'右上角全屏按钮 (F11) 可进入专注模式',icon:'🖥️'},
+       {text:'右键任意便利贴卡片可快速操作，悬浮窗随时呼出',icon:'⚡'},
+       {text:'在「同步设置」开启云端，多设备数据实时共享',icon:'☁️'},
+     ]},
+  ];
+  const s=steps[Math.min(step,steps.length-1)];
+  document.getElementById('setupSubtitle').textContent=s.subtitle;
+  document.getElementById('setupSteps').innerHTML=s.items.map((it,i)=>`<div class="setup-step"><span class="num">${i+1}</span><span>${it.icon+' '+it.text}</span></div>`).join('');
+  const nextBtn=document.getElementById('setupNextBtn');
+  nextBtn.textContent=step>=2?'完成设置':'下一步';
+  document.getElementById('setupGuide').classList.add('show');
+}
 /* fullscreen */
 function toggleFullscreen(){
   if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()||document.documentElement.webkitRequestFullscreen?.();}
