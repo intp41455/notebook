@@ -429,7 +429,6 @@ let searchQuery='';
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function uid(){return (crypto&&crypto.randomUUID)?crypto.randomUUID():('id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8));}
 function now(){return Date.now();}
-function fmtDate(ts){const d=new Date(ts);return d.getMonth()+1+'月'+d.getDate()+'日';}
 function fmtTime(ts){const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 function greeting(){const h=new Date().getHours();if(h<6)return'夜深了';if(h<11)return'早上好';if(h<14)return'中午好';if(h<18)return'下午好';if(h<22)return'晚上好';return'夜深了';}
 function weekdayCN(d){return['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];}
