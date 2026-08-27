@@ -1163,7 +1163,14 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   initFloatDrag();
   // restore float position from last session
   const fp=getFloatPos();
-  if(fp.x!=null){const w=document.getElementById('floatWidget');if(w){w.style.left=fp.x+'px';w.style.top=fp.y+'px';w.style.right='auto';w.style.bottom='auto';}}
+  const floatW=document.getElementById('floatWidget');
+  if(fp.x!=null&&floatW){
+    floatW.style.left=fp.x+'px';floatW.style.top=fp.y+'px';floatW.style.right='auto';floatW.style.bottom='auto';
+  }else if(floatW){
+    const d=window.innerWidth;
+    floatW.style.right=(d<768?10:18)+'px';floatW.style.bottom='80px';floatW.style.left='auto';floatW.style.top='auto';
+  }
+  if(fp.minimized){_floatMinimized=true;floatW.classList.remove('open');}
   switchView('dashboard');
   if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
@@ -1185,12 +1192,15 @@ const FLOAT_POS_KEY='cw_float_pos';
 function getFloatPos(){
   try{return JSON.parse(localStorage.getItem(FLOAT_POS_KEY)||'{}');}catch(e){return{};}
 }
-function setFloatPos(x,y){try{localStorage.setItem(FLOAT_POS_KEY,JSON.stringify({x,y}));}catch(e){}}
+function setFloatPos(x,y,minimized){
+  try{localStorage.setItem(FLOAT_POS_KEY,JSON.stringify({x,y,minimized}));}catch(e){}
+}
 function toggleFloat(){
   const w=document.getElementById('floatWidget');
   if(!_floatMinimized){
     _floatMinimized=true;
     w.classList.remove('open');
+    setFloatPos(+w.style.left||0,+w.style.top||0,true);
     return;
   }
   _floatMinimized=false;
@@ -1199,10 +1209,13 @@ function toggleFloat(){
   else{const d=window.innerWidth;w.style.right=(d<768?10:18)+'px';w.style.bottom='80px';w.style.left='auto';w.style.top='auto';}
   w.classList.add('open');
   updateFloatWidget();
+  setFloatPos(+w.style.left||0,+w.style.top||0,false);
 }
 function minimizeFloat(){
   _floatMinimized=true;
-  document.getElementById('floatWidget').classList.remove('open');
+  const w=document.getElementById('floatWidget');
+  w.classList.remove('open');
+  setFloatPos(+w.style.left||0,+w.style.top||0,true);
 }
 function initFloatDrag(){
   const hd=document.getElementById('floatHd');
@@ -1225,7 +1238,7 @@ function initFloatDrag(){
   document.addEventListener('mouseup',()=>{
     if(!drag)return;drag=false;
     const w=document.getElementById('floatWidget');
-    setFloatPos(+w.style.left||0,+w.style.top||0);
+    setFloatPos(+w.style.left||0,+w.style.top||0,_floatMinimized);
   });
 }
 function updateFloatWidget(){
