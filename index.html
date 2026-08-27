@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0">
 <meta name="theme-color" content="#1a1f2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
 <title>云同步便利贴 · 记事本与待办看板</title>
 <style>
 /* ============ TOKENS (cool tech) ============ */
@@ -103,7 +106,8 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 .greet .nm{font-size:26px;font-weight:700;margin-top:4px}
 .greet .dt{font-size:13px;opacity:.8;margin-top:8px}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
-.stat{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);padding:16px;box-shadow:var(--shadow-card)}
+.stat{background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);padding:16px;box-shadow:var(--shadow-card);cursor:pointer;transition:.15s}
+.stat:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(26,31,46,.1);border-color:var(--accent-muted)}
 .stat .n{font-size:24px;font-weight:700}
 .stat .l{font-size:12px;color:var(--text-secondary);margin-top:3px}
 .stat .ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;margin-bottom:10px;font-size:16px}
@@ -288,6 +292,25 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 .hidden{display:none!important}
 /* desktop: centered modal cards instead of bottom sheet */
 @media(min-width:901px){.modal-root{align-items:center}.modal-root .sheet{border-radius:var(--radius-card)}.modal-root .sheet .grab{display:none}}
+/* floating widget mode */
+.float-btn{position:fixed;right:18px;bottom:90px;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 4px 16px rgba(44,74,124,.45);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:900;transition:.2s}
+.float-btn:hover{transform:scale(1.1)}
+.float-btn svg{width:22px;height:22px}
+.float-widget{position:fixed;right:18px;bottom:148px;width:300px;max-height:60vh;background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:0 8px 32px rgba(26,31,46,.22);z-index:899;display:none;flex-direction:column;overflow:hidden}
+.float-widget.open{display:flex}
+.float-hd{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.float-hd span{font-size:14px;font-weight:700;color:var(--text-primary)}
+.float-hd button{background:none;border:none;cursor:pointer;color:var(--text-tertiary);padding:2px}
+.float-body{padding:12px 16px;overflow-y:auto;flex:1}
+.float-body p{font-size:13px;color:var(--text-secondary);margin:4px 0;line-height:1.6}
+.float-body .fw-stat{display:flex;gap:12px;margin-bottom:10px}
+.float-body .fw-stat div{flex:1;background:var(--surface-nested);border-radius:8px;padding:8px 10px;text-align:center}
+.float-body .fw-stat strong{display:block;font-size:20px;color:var(--accent)}
+.float-body .fw-stat small{font-size:11px;color:var(--text-tertiary)}
+.float-body .fw-item{padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px;color:var(--text-secondary)}
+.float-body .fw-item:last-child{border:none}
+@media(max-width:520px){.float-widget{right:10px;left:10px;width:auto;bottom:140px}}
+@media(min-width:901px){.float-btn{bottom:24px}.float-widget{bottom:80px}}
 </style>
 </head>
 <body>
@@ -326,6 +349,18 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
       <section class="view" id="view-export"></section>
     </div>
   </div>
+</div>
+
+<!-- FLOATING WIDGET BUTTON -->
+<button class="float-btn" id="floatBtn" onclick="toggleFloat()" title="悬浮窗">
+  <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</button>
+<div class="float-widget" id="floatWidget">
+  <div class="float-hd">
+    <span>📋 记事板</span>
+    <button onclick="toggleFloat()">✕</button>
+  </div>
+  <div class="float-body" id="floatBody"></div>
 </div>
 
 <!-- FAB + TABBAR -->
@@ -604,10 +639,10 @@ function renderDashboard(){
       <div class="dt">${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日 · ${weekdayCN(today)}</div>
     </div>
     <div class="stat-grid">
-      <div class="stat"><div class="ic" style="background:var(--accent-muted);color:var(--accent)">📋</div><div class="n">${pend}</div><div class="l">待办任务</div></div>
-      <div class="stat"><div class="ic" style="background:#e6f0e8;color:#4a7a55">✓</div><div class="n">${done}</div><div class="l">已完成</div></div>
-      <div class="stat"><div class="ic" style="background:#fdf3e3;color:#a07a2a">📌</div><div class="n">${notesC}</div><div class="l">便利贴</div></div>
-      <div class="stat"><div class="ic" style="background:#fdeef4;color:#b06a7e">🗓️</div><div class="n">${evToday.length}</div><div class="l">今日日程</div></div>
+      <div class="stat" onclick="switchView('todos')"><div class="ic" style="background:var(--accent-muted);color:var(--accent)">📋</div><div class="n">${pend}</div><div class="l">待办任务</div></div>
+      <div class="stat" onclick="switchView('todos')"><div class="ic" style="background:#e6f0e8;color:#4a7a55">✓</div><div class="n">${done}</div><div class="l">已完成</div></div>
+      <div class="stat" onclick="switchView('notes')"><div class="ic" style="background:#fdf3e3;color:#a07a2a">📌</div><div class="n">${notesC}</div><div class="l">便利贴</div></div>
+      <div class="stat" onclick="switchView('calendar')"><div class="ic" style="background:#fdeef4;color:#b06a7e">🗓️</div><div class="n">${evToday.length}</div><div class="l">今日日程</div></div>
     </div>
     <div class="dash-cols">
       <div class="panel">
@@ -1111,17 +1146,57 @@ function seedIfEmpty(){
 /* =========================================================
    INIT
 ========================================================= */
+let pwaPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e;});
 (function init(){
   loadLocal();
   seedIfEmpty();
   renderNav();
+  updateFloatWidget();
   switchView('dashboard');
   if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
-  // push on any save via custom event is handled inline; ensure periodic sync
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
-  // close drawer on resize to desktop
   window.addEventListener('resize',()=>{if(window.innerWidth>900)toggleDrawer(false);});
+  // PWA install prompt button
+  if(pwaPrompt){
+    const tip=document.createElement('div');
+    tip.id='pwaTip';
+    tip.innerHTML=`<span>将记事板固定到桌面，随时使用</span><button class="btn sm" onclick="doInstall()">添加</button><button class="btn ghost sm" onclick="this.parentElement.remove()">暂不</button>`;
+    Object.assign(tip.style,{position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',background:'var(--surface-card)',border:'1px solid var(--border)',borderRadius:'var(--radius-card)',padding:'10px 16px',display:'flex',alignItems:'center',gap:'8px',boxShadow:'var(--shadow-overlay)',zIndex:'999',fontSize:'13px',whiteSpace:'nowrap'});
+    document.body.appendChild(tip);
+  }
 })();
+function doInstall(){if(!pwaPrompt)return;pwaPrompt.prompt();pwaPrompt.userChoice.then(()=>{const t=document.getElementById('pwaTip');if(t)t.remove();});}
+
+/* floating widget */
+function toggleFloat(){
+  const w=document.getElementById('floatWidget');
+  const isOpen=w.classList.toggle('open');
+  if(isOpen)updateFloatWidget();
+}
+function updateFloatWidget(){
+  const body=document.getElementById('floatBody');
+  if(!body)return;
+  const today=fmtDate(new Date());
+  const todayEv=state.events.filter(e=>e.date===today&&!e.deletedAt);
+  const pendTodos=state.todos.filter(t=>t.column!=='done'&&!t.deletedAt).slice(0,3);
+  let h=`<div class="fw-stat">
+    <div><strong>${state.notes.filter(n=>!n.deletedAt).length}</strong><small>便利贴</small></div>
+    <div><strong>${pendTodos.length}</strong><small>待办</small></div>
+    <div><strong>${todayEv.length}</strong><small>今日日程</small></div>
+  </div>`;
+  if(todayEv.length){
+    h+='<div style="font-size:12px;color:var(--text-tertiary);margin:6px 0 4px">今日日程</div>';
+    todayEv.slice(0,3).forEach(ev=>{h+=`<div class="fw-item">🗓️ ${ev.time?ev.time+' · ':''}${escHtml(ev.title)}</div>`;});
+  }
+  if(pendTodos.length){
+    h+='<div style="font-size:12px;color:var(--text-tertiary);margin:6px 0 4px">待办</div>';
+    pendTodos.forEach(t=>{h+=`<div class="fw-item">☐ ${escHtml(t.text)}</div>`;});
+  }
+  if(!todayEv.length&&!pendTodos.length)h+='<p>当前无待处理事项</p>';
+  h+='<div style="text-align:center;margin-top:10px"><button class="btn sm" style="width:100%" onclick="toggleFloat();switchView(\'dashboard\')">进入记事板 →</button></div>';
+  body.innerHTML=h;
+}
 </script>
 </body>
 </html>
