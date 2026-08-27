@@ -296,21 +296,24 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 .float-btn{position:fixed;right:18px;bottom:90px;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 4px 16px rgba(44,74,124,.45);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:900;transition:.2s}
 .float-btn:hover{transform:scale(1.1)}
 .float-btn svg{width:22px;height:22px}
-.float-widget{position:fixed;right:18px;bottom:148px;width:300px;max-height:60vh;background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:0 8px 32px rgba(26,31,46,.22);z-index:899;display:none;flex-direction:column;overflow:hidden}
+.float-widget{position:fixed;width:320px;max-width:calc(100vw - 36px);background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:0 8px 32px rgba(26,31,46,.22);z-index:899;display:none;flex-direction:column;overflow:hidden}
 .float-widget.open{display:flex}
-.float-hd{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.float-hd span{font-size:14px;font-weight:700;color:var(--text-primary)}
-.float-hd button{background:none;border:none;cursor:pointer;color:var(--text-tertiary);padding:2px}
-.float-body{padding:12px 16px;overflow-y:auto;flex:1}
+.float-hd{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;cursor:move;user-select:none}
+.float-hd span{font-size:13px;font-weight:700;color:var(--text-primary)}
+.float-hd-btns{display:flex;gap:4px}
+.float-hd-btns button{background:none;border:none;cursor:pointer;color:var(--text-tertiary);padding:2px 6px;border-radius:4px;font-size:14px;line-height:1}
+.float-hd-btns button:hover{background:var(--surface-nested);color:var(--text-primary)}
+.float-body{padding:12px 14px;overflow-y:auto;flex:1;max-height:50vh}
 .float-body p{font-size:13px;color:var(--text-secondary);margin:4px 0;line-height:1.6}
-.float-body .fw-stat{display:flex;gap:12px;margin-bottom:10px}
-.float-body .fw-stat div{flex:1;background:var(--surface-nested);border-radius:8px;padding:8px 10px;text-align:center}
+.float-body .fw-stat{display:flex;gap:8px;margin-bottom:10px}
+.float-body .fw-stat div{flex:1;background:var(--surface-nested);border-radius:8px;padding:8px 6px;text-align:center}
 .float-body .fw-stat strong{display:block;font-size:20px;color:var(--accent)}
 .float-body .fw-stat small{font-size:11px;color:var(--text-tertiary)}
-.float-body .fw-item{padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px;color:var(--text-secondary)}
+.float-body .fw-item{padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .float-body .fw-item:last-child{border:none}
-@media(max-width:520px){.float-widget{right:10px;left:10px;width:auto;bottom:140px}}
-@media(min-width:901px){.float-btn{bottom:24px}.float-widget{bottom:80px}}
+.float-ftr{padding:8px 14px;border-top:1px solid var(--border-light);flex-shrink:0}
+@media(max-width:520px){.float-widget{right:10px;left:10px;width:auto;bottom:80px}.float-btn{bottom:72px}.float-hd{cursor:default}}
+@media(min-width:901px){.float-btn{bottom:24px}.float-body{max-height:60vh}}
 </style>
 </head>
 <body>
@@ -352,15 +355,19 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 </div>
 
 <!-- FLOATING WIDGET BUTTON -->
-<button class="float-btn" id="floatBtn" onclick="toggleFloat()" title="悬浮窗">
+<button class="float-btn" id="floatBtn" onclick="toggleFloat()" title="记事板悬浮窗">
   <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
 </button>
 <div class="float-widget" id="floatWidget">
-  <div class="float-hd">
+  <div class="float-hd" id="floatHd">
     <span>📋 记事板</span>
-    <button onclick="toggleFloat()">✕</button>
+    <div class="float-hd-btns">
+      <button onclick="minimizeFloat()" title="最小化">─</button>
+      <button onclick="toggleFloat()" title="关闭">✕</button>
+    </div>
   </div>
   <div class="float-body" id="floatBody"></div>
+  <div class="float-ftr"><button class="btn sm" style="width:100%" onclick="toggleFloat();switchView('dashboard')">进入记事板 →</button></div>
 </div>
 
 <!-- FAB + TABBAR -->
@@ -1153,6 +1160,10 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   seedIfEmpty();
   renderNav();
   updateFloatWidget();
+  initFloatDrag();
+  // restore float position from last session
+  const fp=getFloatPos();
+  if(fp.x!=null){const w=document.getElementById('floatWidget');if(w){w.style.left=fp.x+'px';w.style.top=fp.y+'px';w.style.right='auto';w.style.bottom='auto';}}
   switchView('dashboard');
   if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
@@ -1169,10 +1180,53 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
 function doInstall(){if(!pwaPrompt)return;pwaPrompt.prompt();pwaPrompt.userChoice.then(()=>{const t=document.getElementById('pwaTip');if(t)t.remove();});}
 
 /* floating widget */
+let _floatMinimized=false;
+const FLOAT_POS_KEY='cw_float_pos';
+function getFloatPos(){
+  try{return JSON.parse(localStorage.getItem(FLOAT_POS_KEY)||'{}');}catch(e){return{};}
+}
+function setFloatPos(x,y){try{localStorage.setItem(FLOAT_POS_KEY,JSON.stringify({x,y}));}catch(e){}}
 function toggleFloat(){
   const w=document.getElementById('floatWidget');
-  const isOpen=w.classList.toggle('open');
-  if(isOpen)updateFloatWidget();
+  if(!_floatMinimized){
+    _floatMinimized=true;
+    w.classList.remove('open');
+    return;
+  }
+  _floatMinimized=false;
+  const p=getFloatPos();
+  if(p.x!=null){w.style.left=p.x+'px';w.style.top=p.y+'px';w.style.right='auto';w.style.bottom='auto';}
+  else{const d=window.innerWidth;w.style.right=(d<768?10:18)+'px';w.style.bottom='80px';w.style.left='auto';w.style.top='auto';}
+  w.classList.add('open');
+  updateFloatWidget();
+}
+function minimizeFloat(){
+  _floatMinimized=true;
+  document.getElementById('floatWidget').classList.remove('open');
+}
+function initFloatDrag(){
+  const hd=document.getElementById('floatHd');
+  if(!hd||window.innerWidth<=520)return;
+  let drag=false,dx=0,dy=0;
+  hd.addEventListener('mousedown',e=>{
+    drag=true;
+    const r=document.getElementById('floatWidget').getBoundingClientRect();
+    dx=e.clientX-r.left;dy=e.clientY-r.top;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!drag)return;
+    const w=document.getElementById('floatWidget');
+    let x=e.clientX-dx,y=e.clientY-dy;
+    x=Math.max(0,Math.min(window.innerWidth-w.offsetWidth,x));
+    y=Math.max(0,Math.min(window.innerHeight-w.offsetHeight,y));
+    w.style.left=x+'px';w.style.top=y+'px';w.style.right='auto';w.style.bottom='auto';
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!drag)return;drag=false;
+    const w=document.getElementById('floatWidget');
+    setFloatPos(+w.style.left||0,+w.style.top||0);
+  });
 }
 function updateFloatWidget(){
   const body=document.getElementById('floatBody');
@@ -1187,14 +1241,13 @@ function updateFloatWidget(){
   </div>`;
   if(todayEv.length){
     h+='<div style="font-size:12px;color:var(--text-tertiary);margin:6px 0 4px">今日日程</div>';
-    todayEv.slice(0,3).forEach(ev=>{h+=`<div class="fw-item">🗓️ ${ev.time?ev.time+' · ':''}${escHtml(ev.title)}</div>`;});
+    todayEv.slice(0,3).forEach(ev=>{h+=`<div class="fw-item" title="${ev.time?ev.time+' · ':''}${ev.title}">🗓️ ${ev.time?ev.time+' · ':''}${escapeHtml(ev.title)}</div>`;});
   }
   if(pendTodos.length){
     h+='<div style="font-size:12px;color:var(--text-tertiary);margin:6px 0 4px">待办</div>';
-    pendTodos.forEach(t=>{h+=`<div class="fw-item">☐ ${escHtml(t.text)}</div>`;});
+    pendTodos.forEach(t=>{h+=`<div class="fw-item" title="${t.text}">☐ ${escapeHtml(t.text)}</div>`;});
   }
-  if(!todayEv.length&&!pendTodos.length)h+='<p>当前无待处理事项</p>';
-  h+='<div style="text-align:center;margin-top:10px"><button class="btn sm" style="width:100%" onclick="toggleFloat();switchView(\'dashboard\')">进入记事板 →</button></div>';
+  if(!todayEv.length&&!pendTodos.length)h+='<p style="margin-top:8px">当前无待处理事项</p>';
   body.innerHTML=h;
 }
 </script>
