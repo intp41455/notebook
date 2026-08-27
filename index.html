@@ -877,7 +877,7 @@ function getWeekEnd(d){
   e.setHours(23,59,59,999);
   return e;
 }
-function fmtDate(d){return d.toISOString().slice(0,10);}
+function fmtDate(d){const dt=d instanceof Date?d:new Date(d);return dt.toISOString().slice(0,10);}
 function fmtDateCN(d){return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';}
 function filterByWeek(items, start, end){
   return items.filter(it=>{
