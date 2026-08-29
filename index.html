@@ -1207,12 +1207,11 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
     const d=window.innerWidth;
     floatW.style.right=(d<768?10:18)+'px';floatW.style.bottom='80px';floatW.style.left='auto';floatW.style.top='auto';
   }
-  // in PWA standalone mode, use persistent float window; in browser mode, restore in-page widget
-  const isPwa=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
-  if(!isPwa){
-    if(fp.minimized){_floatMinimized=true;floatW.classList.remove('open');}
-    else{_floatMinimized=false;floatW.classList.add('open');}
-  }
+  const autoOpen=localStorage.getItem(FLOAT_AUTO_OPEN_KEY)!=='0';
+  if(autoOpen&&floatW){
+    _floatMinimized=false;
+    floatW.classList.add('open');
+  }else{_floatMinimized=true;}
   switchView('dashboard');
   updateFsBtn();
   if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
@@ -1225,18 +1224,16 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   // 切回页面/重新打开标签页时自动恢复悬浮窗
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='visible'){
-      const p=getFloatPos();
-      if(!p.minimized){
-        _floatMinimized=false;
+      const autoOpen=localStorage.getItem(FLOAT_AUTO_OPEN_KEY)!=='0';
+      if(autoOpen&&!_floatMinimized&&floatW){
         floatW.classList.add('open');
         updateFloatWidget();
       }
     }
   });
   window.addEventListener('pageshow',()=>{
-    const p=getFloatPos();
-    if(!p.minimized){
-      _floatMinimized=false;
+    const autoOpen=localStorage.getItem(FLOAT_AUTO_OPEN_KEY)!=='0';
+    if(autoOpen&&!_floatMinimized){
       if(floatW){floatW.classList.add('open');updateFloatWidget();}
     }
   });
@@ -1295,7 +1292,7 @@ function renderSetupStep(step){
     {title:'确认已安装',
      subtitle:`${isPwa?'✅ 已检测到记事板以独立模式运行':'⚠️ 尚未检测到 PWA 安装'},请确认上一步已完成`,
      items:[
-       {text:(isPwa?'记事板已作为独立应用运行，关闭窗口后仍可拖出悬浮窗':'安装完成后请重新打开此页面，向导将自动完成'),icon:(isPwa?'✅':'👉')},
+       {text:(isPwa?'记事板已以独立窗口运行，每次打开都会自动恢复悬浮窗位置':'安装完成后请重新打开此页面，向导将自动完成'),icon:(isPwa?'✅':'👉')},
        {text:'即使浏览器关闭，悬浮窗的位置和展开状态也已保存，下次打开自动恢复',icon:'💾'},
      ]},
     {title:'搞定！开始使用',
@@ -1331,6 +1328,7 @@ ICONS.fullscreen_exit='<path d="M8 3v5H3M21 3h-5v5M3 21h5v-5M21 21h-5v5"/><path 
 /* floating widget */
 let _floatMinimized=false;
 const FLOAT_POS_KEY='cw_float_pos';
+const FLOAT_AUTO_OPEN_KEY='cw_float_auto_open';
 function getFloatPos(){
   try{return JSON.parse(localStorage.getItem(FLOAT_POS_KEY)||'{}');}catch(e){return{};}
 }
@@ -1338,21 +1336,16 @@ function setFloatPos(x,y,minimized){
   try{localStorage.setItem(FLOAT_POS_KEY,JSON.stringify({x,y,minimized}));}catch(e){}
 }
 function toggleFloat(){
-  // PWA standalone mode: open/close persistent floating window
-  const isPwa=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
-  if(isPwa){
-    const fw=window.open('/notebook/float.html','_cw_float','width=300,height=400,resizable,scrollbars');
-    if(fw){fw.focus();}return;
-  }
-  // browser tab mode: toggle in-page widget
   const w=document.getElementById('floatWidget');
   if(!_floatMinimized){
     _floatMinimized=true;
     w.classList.remove('open');
     setFloatPos(+w.style.left||0,+w.style.top||0,true);
+    localStorage.setItem(FLOAT_AUTO_OPEN_KEY,'0');
     return;
   }
   _floatMinimized=false;
+  localStorage.setItem(FLOAT_AUTO_OPEN_KEY,'1');
   const p=getFloatPos();
   if(p.x!=null){w.style.left=p.x+'px';w.style.top=p.y+'px';w.style.right='auto';w.style.bottom='auto';}
   else{const d=window.innerWidth;w.style.right=(d<768?10:18)+'px';w.style.bottom='80px';w.style.left='auto';w.style.top='auto';}
