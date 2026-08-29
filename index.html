@@ -332,7 +332,8 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 @media(max-width:520px){.float-widget{right:10px;left:10px;width:auto;bottom:80px}.float-btn{bottom:72px}.float-hd{cursor:default}}
 @media(min-width:901px){.float-btn{bottom:24px}.float-body{max-height:60vh}}
 /* fullscreen mode */
-.fullscreen-mode .sidebar,.fullscreen-mode .tabbar,.fullscreen-mode .float-btn{display:none!important}
+.fullscreen-mode .sidebar,.fullscreen-mode .tabbar{display:none!important}
+/* .float-btn 保留可见，以便全屏时仍可呼出悬浮窗 */
 .fullscreen-mode .main{width:100vw;height:100vh;overflow:hidden}
 .fullscreen-mode .content{padding:20px 28px}
 </style>
@@ -1206,7 +1207,13 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
     const d=window.innerWidth;
     floatW.style.right=(d<768?10:18)+'px';floatW.style.bottom='80px';floatW.style.left='auto';floatW.style.top='auto';
   }
-  if(fp.minimized){_floatMinimized=true;floatW.classList.remove('open');}
+  if(fp.minimized){
+    _floatMinimized=true;
+    floatW.classList.remove('open');
+  }else{
+    _floatMinimized=false;
+    floatW.classList.add('open');
+  }
   switchView('dashboard');
   updateFsBtn();
   if(syncCfg.enabled){setSyncStatus('spin','连接中…');startSyncLoop();syncCycle(true);}else{setSyncStatus('off','本地模式 · 未连接');}
@@ -1216,6 +1223,24 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   });
   document.addEventListener('fullscreenchange',()=>{document.body.classList.toggle('fullscreen-mode',!!document.fullscreenElement);updateFsBtn();});
   window.addEventListener('resize',()=>{if(window.innerWidth>900)toggleDrawer(false);});
+  // 切回页面/重新打开标签页时自动恢复悬浮窗
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){
+      const p=getFloatPos();
+      if(!p.minimized){
+        _floatMinimized=false;
+        floatW.classList.add('open');
+        updateFloatWidget();
+      }
+    }
+  });
+  window.addEventListener('pageshow',()=>{
+    const p=getFloatPos();
+    if(!p.minimized){
+      _floatMinimized=false;
+      if(floatW){floatW.classList.add('open');updateFloatWidget();}
+    }
+  });
 
   // session tracking: detect fresh browser launch
   const SESS_KEY='cw_sess_v1';
