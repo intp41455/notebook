@@ -1207,12 +1207,11 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
     const d=window.innerWidth;
     floatW.style.right=(d<768?10:18)+'px';floatW.style.bottom='80px';floatW.style.left='auto';floatW.style.top='auto';
   }
-  if(fp.minimized){
-    _floatMinimized=true;
-    floatW.classList.remove('open');
-  }else{
-    _floatMinimized=false;
-    floatW.classList.add('open');
+  // in PWA standalone mode, use persistent float window; in browser mode, restore in-page widget
+  const isPwa=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
+  if(!isPwa){
+    if(fp.minimized){_floatMinimized=true;floatW.classList.remove('open');}
+    else{_floatMinimized=false;floatW.classList.add('open');}
   }
   switchView('dashboard');
   updateFsBtn();
@@ -1339,6 +1338,13 @@ function setFloatPos(x,y,minimized){
   try{localStorage.setItem(FLOAT_POS_KEY,JSON.stringify({x,y,minimized}));}catch(e){}
 }
 function toggleFloat(){
+  // PWA standalone mode: open/close persistent floating window
+  const isPwa=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;
+  if(isPwa){
+    const fw=window.open('/notebook/float.html','_cw_float','width=300,height=400,resizable,scrollbars');
+    if(fw){fw.focus();}return;
+  }
+  // browser tab mode: toggle in-page widget
   const w=document.getElementById('floatWidget');
   if(!_floatMinimized){
     _floatMinimized=true;

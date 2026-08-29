@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>记事板悬浮窗</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --accent:#2c4a7c;--accent-muted:rgba(44,74,124,.15);
+  --surface-card:#fff;--surface-nested:#f4f6fa;
+  --border:#e2e6ee;--border-light:#eef0f5;
+  --text-primary:#1a1f2e;--text-secondary:#4a5568;--text-tertiary:#8a93a3;
+  --radius-card:12px;
+  --shadow:0 4px 20px rgba(26,31,46,.12);
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--surface-card)}
+.float-wrap{position:absolute;width:300px;background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;user-select:none;-webkit-app-region:drag}
+.hd{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;-webkit-app-region:drag}
+.hd span{font-size:13px;font-weight:700;color:var(--text-primary)}
+.hd-btns{display:flex;gap:2px;-webkit-app-region:no-drag}
+.hd-btns button{background:none;border:none;cursor:pointer;color:var(--text-tertiary);padding:3px 7px;border-radius:5px;font-size:13px;line-height:1}
+.hd-btns button:hover{background:var(--surface-nested);color:var(--text-primary)}
+.body{padding:11px 14px;overflow-y:auto;flex:1;font-size:13px}
+.body::-webkit-scrollbar{width:4px}
+.body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.stat{display:flex;gap:6px;margin-bottom:9px}
+.stat div{flex:1;background:var(--surface-nested);border-radius:7px;padding:7px 4px;text-align:center}
+.stat strong{display:block;font-size:19px;color:var(--accent);line-height:1.2}
+.stat small{font-size:10px;color:var(--text-tertiary)}
+.section-label{font-size:11px;color:var(--text-tertiary);margin:5px 0 3px;letter-spacing:.3px}
+.item{padding:5px 0;border-bottom:1px solid var(--border-light);color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5}
+.item:last-child{border:none}
+.empty{padding:14px 0;text-align:center;color:var(--text-tertiary);font-size:12px}
+.ft{padding:7px 14px;border-top:1px solid var(--border-light);flex-shrink:0;-webkit-app-region:no-drag}
+.ft button{width:100%;padding:7px;border:none;border-radius:7px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:.15s}
+.ft button:hover{opacity:.85}
+/* drag ghost */
+.dragging{opacity:.7}
+</style>
+</head>
+<body>
+<div class="float-wrap" id="fw">
+  <div class="hd">
+    <span>📋 记事板</span>
+    <div class="hd-btns">
+      <button onclick="doMinimize()" title="最小化到图标">─</button>
+      <button onclick="doClose()" title="关闭">✕</button>
+    </div>
+  </div>
+  <div class="body" id="fb"></div>
+  <div class="ft"><button onclick="doOpenMain()">打开记事板 →</button></div>
+</div>
+
+<script>
+const LS_KEY='cloudworkbench_v1';
+const POS_KEY='cw_float_pos';
+const INTERVAL=3000;
+let minimized=false;
+let intervalId=null;
+
+/* ---- Position & size ---- */
+function getPos(){
+  try{return JSON.parse(localStorage.getItem(POS_KEY)||'{}');}catch(e){return{};}
+}
+function setPos(x,y,w,h,isMin){
+  try{localStorage.setItem(POS_KEY,JSON.stringify({x,y,w,h,minimized:!!isMin}));}catch(e){}
+}
+
+function restorePos(){
+  const p=getPos();
+  const fw=document.getElementById('fw');
+  if(p.x!=null){
+    fw.style.left=p.x+'px';fw.style.top=p.y+'px';
+    if(p.w)fw.style.width=p.w+'px';
+    if(p.h)fw.style.height=p.h+'px';
+  }else{
+    fw.style.right='18px';fw.style.top='120px';fw.style.left='auto';
+  }
+  if(p.minimized){minimizeUI();}else{showUI();}
+}
+
+function showUI(){
+  minimized=false;
+  document.getElementById('fw').style.display='flex';
+  setPos(+el().style.left||0,+el().style.top||0,+el().offsetWidth,+el().offsetHeight,false);
+}
+function minimizeUI(){
+  minimized=true;
+  document.getElementById('fw').style.display='none';
+  setPos(+el().style.left||0,+el().style.top||0,+el().offsetWidth,+el().offsetHeight,true);
+}
+
+function el(){return document.getElementById('fw');}
+
+/* ---- Drag ---- */
+(function initDrag(){
+  const hd=document.querySelector('.hd');
+  let dragging=false,ox=0,oy=0,startX=0,startY=0;
+  hd.addEventListener('mousedown',e=>{
+    if(e.target.tagName==='BUTTON')return;
+    dragging=true;
+    startX=e.clientX;startY=e.clientY;
+    const r=el().getBoundingClientRect();
+    ox=e.clientX-r.left;oy=e.clientY-r.top;
+    el().style.transition='none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    let x=e.clientX-ox,y=e.clientY-oy;
+    x=Math.max(0,Math.min(window.innerWidth-el().offsetWidth,x));
+    y=Math.max(0,Math.min(window.innerHeight-el().offsetHeight,y));
+    el().style.left=x+'px';el().style.top=y+'px';
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!dragging)return;dragging=false;
+    el().style.transition='';
+    setPos(+el().style.left||0,+el().style.top||0,+el().offsetWidth,+el().offsetHeight,minimized);
+  });
+  /* touch support */
+  hd.addEventListener('touchstart',e=>{
+    if(e.target.tagName==='BUTTON')return;
+    const t=e.touches[0];
+    dragging=true;
+    const r=el().getBoundingClientRect();
+    ox=t.clientX-r.left;oy=t.clientY-r.top;
+    el().style.transition='none';
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!dragging)return;
+    const t=e.touches[0];
+    let x=t.clientX-ox,y=t.clientY-oy;
+    x=Math.max(0,Math.min(window.innerWidth-el().offsetWidth,x));
+    y=Math.max(0,Math.min(window.innerHeight-el().offsetHeight,y));
+    el().style.left=x+'px';el().style.top=y+'px';
+  },{passive:true});
+  document.addEventListener('touchend',()=>{
+    if(!dragging)return;dragging=false;
+    el().style.transition='';
+    setPos(+el().style.left||0,+el().style.top||0,+el().offsetWidth,+el().offsetHeight,minimized);
+  });
+})();
+
+/* ---- Data rendering ---- */
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fmtDate(d){const dt=d instanceof Date?d:new Date(d);return dt.toISOString().slice(0,10);}
+
+function render(){
+  let state={notes:[],todos:[],events:[]};
+  try{const raw=localStorage.getItem(LS_KEY);if(raw)state=JSON.parse(raw);}catch(e){}
+  if(!state.notes)state.notes=[];if(!state.todos)state.todos=[];if(!state.events)state.events=[];
+
+  const body=document.getElementById('fb');
+  const today=fmtDate(new Date());
+  const todayEv=state.events.filter(e=>e.date===today&&!e.deletedAt);
+  const pendTodos=state.todos.filter(t=>t.column!=='done'&&!t.deletedAt).slice(0,3);
+  const noteCount=state.notes.filter(n=>!n.deletedAt).length;
+  const todoCount=pendTodos.length;
+  const evCount=todayEv.length;
+
+  let h=`<div class="stat">
+    <div><strong>${noteCount}</strong><small>便利贴</small></div>
+    <div><strong>${todoCount}</strong><small>待办</small></div>
+    <div><strong>${evCount}</strong><small>今日日程</small></div>
+  </div>`;
+  if(todayEv.length){
+    h+='<div class="section-label">今日日程</div>';
+    todayEv.slice(0,3).forEach(ev=>{h+=`<div class="item" title="${ev.time?ev.time+' · ':''}${ev.title}">🗓️ ${ev.time?ev.time+' · ':''}${escapeHtml(ev.title)}</div>`;});
+  }
+  if(pendTodos.length){
+    h+='<div class="section-label">待办事项</div>';
+    pendTodos.forEach(t=>{h+=`<div class="item" title="${escapeHtml(t.text)}">☐ ${escapeHtml(t.text)}</div>`;});
+  }
+  if(!todayEv.length&&!pendTodos.length)h+='<div class="empty">当前无待处理事项</div>';
+  body.innerHTML=h;
+}
+
+/* ---- Controls ---- */
+function doMinimize(){minimizeUI();}
+function doClose(){window.close();}
+function doOpenMain(){
+  window.close();
+  const mainUrl='/notebook/';
+  window.open(mainUrl,'_blank');
+}
+
+/* ---- Auto-refresh ---- */
+function startRefresh(){
+  render();
+  intervalId=setInterval(render,INTERVAL);
+}
+
+/* ---- Init ---- */
+restorePos();
+startRefresh();
+</script>
+</body>
+</html>
