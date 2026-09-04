@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>云记事板悬浮窗</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width:100%; height:100%;
+  overflow:hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: transparent;
+  color: #1f2937;
+}
+#root {
+  width:100%; height:100%;
+  padding: 8px;
+  display:flex; flex-direction:column;
+}
+.card {
+  flex:1;
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.14), 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid rgba(255,255,255,0.6);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.header {
+  padding: 10px 12px 8px;
+  background: rgba(255,255,255,0.45);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  display:flex; align-items:center; justify-content:space-between;
+  -webkit-app-region: drag;
+  user-select:none;
+}
+.header .title { font-size:13px; font-weight:700; color:#374151; }
+.header .btns { display:flex; gap:6px; -webkit-app-region: no-drag; }
+.btn {
+  width:22px; height:22px; border-radius:6px;
+  border:none; background:rgba(0,0,0,0.06);
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:.15s;
+}
+.btn:hover { background:rgba(0,0,0,0.12); }
+.btn svg { width:14px; height:14px; stroke:#4b5563; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.content { flex:1; overflow:auto; padding:10px; }
+.empty { text-align:center; color:#9ca3af; font-size:12px; margin-top:40px; }
+.item {
+  background:rgba(255,255,255,0.65);
+  border-radius:10px; padding:8px 10px; margin-bottom:8px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.04);
+  border-left:3px solid #60a5fa;
+}
+.item.todo { border-left-color:#f59e0b; }
+.item.event { border-left-color:#34d399; }
+.item .title { font-size:12px; font-weight:600; margin-bottom:3px; }
+.item .body { font-size:11px; color:#4b5563; line-height:1.4; white-space:pre-wrap; }
+.item .meta { font-size:10px; color:#9ca3af; margin-top:4px; }
+.tabs { display:flex; gap:4px; padding:0 10px 8px; }
+.tab {
+  flex:1; padding:6px 0; font-size:11px; border-radius:8px;
+  border:none; background:rgba(0,0,0,0.04); color:#6b7280; cursor:pointer;
+}
+.tab.active { background:rgba(59,130,246,0.12); color:#2563eb; font-weight:600; }
+.footer {
+  padding:6px 12px; font-size:10px; color:#9ca3af;
+  display:flex; justify-content:space-between; align-items:center;
+  background:rgba(255,255,255,0.4);
+  border-top:1px solid rgba(0,0,0,0.04);
+}
+.pin-btn { font-size:10px; padding:3px 8px; border-radius:6px; border:none; background:rgba(0,0,0,0.06); cursor:pointer; }
+.pin-btn.active { background:#2563eb; color:#fff; }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:rgba(0,0,0,0.12); border-radius:4px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="card">
+    <div class="header">
+      <div class="title">云记事板</div>
+      <div class="btns">
+        <button class="btn" id="pinBtn" title="鼠标穿透">📌</button>
+        <button class="btn" id="minBtn" title="最小化"><svg><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="notes">便利贴</button>
+      <button class="tab" data-tab="todos">待办</button>
+      <button class="tab" data-tab="events">日程</button>
+    </div>
+    <div class="content" id="content">
+      <div class="empty">加载中…</div>
+    </div>
+    <div class="footer">
+      <span id="count">0 条</span>
+      <button class="pin-btn" id="openMainBtn">打开主窗口</button>
+    </div>
+  </div>
+</div>
+<script>
+let state = { notes: [], todos: [], events: [], meta: {} };
+let currentTab = 'notes';
+let ignoreMouse = false;
+const api = window.__desktopFloat;
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+function render() {
+  const el = document.getElementById('content');
+  let items = [];
+  if (currentTab === 'notes') {
+    items = (state.notes || []).filter(n => !n.deletedAt).sort((a,b) => (b.pinned?1:0)-(a.pinned?1:0) || b.updatedAt - a.updatedAt);
+    el.innerHTML = items.length ? items.map(n => `
+      <div class="item">
+        <div class="title">${escapeHtml(n.title||'无标题')}${n.pinned?' 📌':''}</div>
+        <div class="body">${escapeHtml(n.body||'')}</div>
+        ${n.tag?`<div class="meta">#${escapeHtml(n.tag)} · ${fmtDate(n.updatedAt)}</div>`:`<div class="meta">${fmtDate(n.updatedAt)}</div>`}
+      </div>`).join('') : '<div class="empty">暂无便利贴</div>';
+  } else if (currentTab === 'todos') {
+    items = (state.todos || []).filter(t => !t.deletedAt && !t.done).sort((a,b) => b.updatedAt - a.updatedAt);
+    el.innerHTML = items.length ? items.map(t => `
+      <div class="item todo">
+        <div class="title">${escapeHtml(t.text||'')}</div>
+        <div class="meta">优先级：${t.priority||'mid'} · ${fmtDate(t.updatedAt)}</div>
+      </div>`).join('') : '<div class="empty">暂无待办</div>';
+  } else {
+    const today = new Date().toISOString().slice(0,10);
+    items = (state.events || []).filter(e => !e.deletedAt && e.date >= today).sort((a,b) => (a.date+'T'+(a.time||'00:00')) > (b.date+'T'+(b.time||'00:00')) ? 1 : -1);
+    el.innerHTML = items.length ? items.map(e => `
+      <div class="item event">
+        <div class="title">${escapeHtml(e.title||'')}</div>
+        <div class="body">${escapeHtml(e.note||'')}</div>
+        <div class="meta">${e.date||''} ${e.time||''}</div>
+      </div>`).join('') : '<div class="empty">暂无日程</div>';
+  }
+  document.getElementById('count').textContent = items.length + ' 条';
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function load() {
+  try { state = await api.getState() || state; } catch(e){}
+  render();
+}
+
+// tabs
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentTab = t.dataset.tab;
+    render();
+  });
+});
+
+// minimize
+document.getElementById('minBtn').addEventListener('click', () => api.minimize());
+
+// open main
+document.getElementById('openMainBtn').addEventListener('click', () => api.toggleMain());
+
+// mouse passthrough toggle
+document.getElementById('pinBtn').addEventListener('click', () => {
+  ignoreMouse = !ignoreMouse;
+  api.setIgnoreMouse(ignoreMouse);
+  document.getElementById('pinBtn').classList.toggle('active', ignoreMouse);
+  document.getElementById('pinBtn').title = ignoreMouse ? '已穿透，点击恢复' : '鼠标穿透';
+});
+
+// drag window by header edge area
+document.querySelector('.header').addEventListener('mousedown', (e) => {
+  if (e.target.closest('.btns')) return;
+  // Electron will handle window dragging via -webkit-app-region
+});
+
+// auto refresh when data changes
+api.onStateChanged(() => load());
+
+load();
+</script>
+</body>
+</html>

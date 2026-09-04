@@ -1,0 +1,59 @@
+{
+  "name": "cloudworkbench-desktop",
+  "version": "1.0.0",
+  "description": "云记事板桌面版 - 透明置顶悬浮窗",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.cloudworkbench.desktop",
+    "productName": "云记事板",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "float.html",
+      "../index.html",
+      "../manifest.json",
+      "../sw.js",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../index.html",
+        "to": "app/index.html"
+      },
+      {
+        "from": "../manifest.json",
+        "to": "app/manifest.json"
+      },
+      {
+        "from": "../sw.js",
+        "to": "app/sw.js"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^32.3.3",
+    "electron-builder": "^25.0.0"
+  }
+}

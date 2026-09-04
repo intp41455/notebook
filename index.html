@@ -419,6 +419,15 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 </div>
 
 <script>
+/* desktop bridge: if running inside Electron, override localStorage to use the file-backed store */
+(function(){
+  var d=window.__desktop;
+  if(d&&d.storage){
+    try{Object.defineProperty(window,'localStorage',{value:d.storage,configurable:true,writable:true});}catch(e){}
+  }
+})();
+</script>
+<script>
 /* =========================================================
    ICONS (lucide-style paths)
 ========================================================= */
@@ -447,7 +456,8 @@ const ICONS={
   'chevron-left':'<polyline points="15 18 9 12 15 6"/>',
   'chevron-right':'<polyline points="9 18 15 12 9 6"/>',
   link:'<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0  -7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
-  fullscreen:'<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>'
+  fullscreen:'<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
 };
 function icon(n){return '<span class="ico"><svg viewBox="0 0 24 24">'+(ICONS[n]||ICONS.dashboard)+'</svg></span>';}
 
@@ -1134,6 +1144,15 @@ function renderSyncView(){
         <button class="btn ghost" onclick="doConnectExisting()">${icon('link')}连接</button>
       </div>`}
       <div class="card sync-card">
+        <h3>迁移到桌面版</h3>
+        <p class="desc">桌面版支持透明置顶悬浮窗，关闭主窗口后仍驻留托盘。导出迁移文件后，放在桌面版同级目录即可自动导入。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="exportMigrateFile()">${icon('download')}导出迁移文件</button>
+          <button class="btn ghost" onclick="document.getElementById('migrateInput').click()">${icon('upload')}导入迁移文件</button>
+        </div>
+        <input id="migrateInput" type="file" accept=".json" style="display:none" onchange="importMigrateFile(this)">
+      </div>
+      <div class="card sync-card">
         <h3>关于同步机制</h3>
         <p class="desc">· 本机改动会自动推送到云端（防抖2秒），并每 8 秒拉取一次其他设备的更新。<br>· 冲突按「每条记录的最后修改时间」合并（后改的覆盖先改的）。<br>· 删除会同步到所有设备（软删除）。<br>· 离线时正常使用本地数据，联网后自动同步。<br>· Master Key 仅保存在本机浏览器，不会上传给任何第三方。</p>
       </div>
@@ -1150,6 +1169,43 @@ function copySyncCode(){
       if(box){const r=document.createRange();r.selectNode(box);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);}
       toast('请手动选中复制');
     });
+}
+function exportMigrateFile(){
+  const payload={
+    version:1,
+    exportedAt:now(),
+    data:JSON.parse(JSON.stringify(state)),
+    sync:JSON.parse(JSON.stringify(syncCfg)),
+    deviceId:DEVICE_ID
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download='cloudworkbench_backup.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('迁移文件已导出 ✓');
+}
+function importMigrateFile(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const payload=JSON.parse(e.target.result);
+      if(payload.data){
+        state=Object.assign({notes:[],todos:[],events:[],meta:{}},payload.data);
+        saveLocal();
+      }
+      if(payload.sync){
+        syncCfg=Object.assign({enabled:false,key:'',binId:'',lastSync:0},payload.sync);
+        localStorage.setItem(SYNC_KEY,JSON.stringify(syncCfg));
+      }
+      renderAll();
+      toast('迁移文件已导入 ✓');
+    }catch(err){toast('文件解析失败：'+err.message);}
+    input.value='';
+  };
+  reader.readAsText(file);
 }
 
 /* =========================================================
