@@ -1,6 +1,7 @@
 node_modules/
 dist/
-app/
+.trae-html-share-packages/
+test-results/
 *.log
 .DS_Store
 cloudworkbench_backup.json

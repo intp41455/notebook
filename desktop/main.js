@@ -37,14 +37,65 @@ function saveSync() { writeJSON(syncPath, store.sync); }
 function saveFloat() { writeJSON(floatPath, store.float); }
 
 /* ---------- migration ---------- */
-function tryAutoImport() {
-  const candidates = [
-    path.join(process.cwd(), 'cloudworkbench_backup.json'),
-    path.join(process.resourcesPath, 'cloudworkbench_backup.json'),
-    path.join(userData, 'cloudworkbench_backup.json')
+function getBackupSearchPaths() {
+  const home = app.getPath('home');
+  const dirs = [
+    process.cwd(),
+    path.join(process.resourcesPath || '', 'app'),
+    app.getPath('userData'),
+    app.getPath('downloads'),
+    app.getPath('desktop'),
+    app.getPath('documents'),
+    home,
+    path.join(home, 'Downloads'),
+    path.join(home, 'Desktop'),
+    path.join(home, 'Documents')
   ];
-  for (const backupPath of candidates) {
-    if (!fs.existsSync(backupPath)) continue;
+  return [...new Set(dirs.filter(Boolean))];
+}
+
+function findBackupFiles() {
+  const files = [];
+  for (const dir of getBackupSearchPaths()) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const entries = fs.readdirSync(dir);
+      for (const name of entries) {
+        if (/^cloudworkbench_backup.*\.json$/i.test(name) && !/_imported_\d+\.json$/i.test(name)) {
+          const full = path.join(dir, name);
+          try { files.push({ path: full, mtime: fs.statSync(full).mtimeMs }); } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+  return files.sort((a, b) => b.mtime - a.mtime);
+}
+
+function isAlreadyImported(backupPath) {
+  const recordPath = path.join(userData, '.imported_backups.json');
+  const records = readJSON(recordPath, {});
+  try {
+    const stat = fs.statSync(backupPath);
+    const key = backupPath + ':' + stat.mtimeMs + ':' + stat.size;
+    return records[key] === true;
+  } catch (e) { return false; }
+}
+
+function markImported(backupPath) {
+  const recordPath = path.join(userData, '.imported_backups.json');
+  const records = readJSON(recordPath, {});
+  try {
+    const stat = fs.statSync(backupPath);
+    const key = backupPath + ':' + stat.mtimeMs + ':' + stat.size;
+    records[key] = true;
+    writeJSON(recordPath, records);
+  } catch (e) {}
+}
+
+function tryAutoImport() {
+  const backups = findBackupFiles();
+  for (const { path: backupPath } of backups) {
+    if (isAlreadyImported(backupPath)) continue;
     try {
       const payload = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
       if (payload.data) {
@@ -55,11 +106,12 @@ function tryAutoImport() {
         store.sync = Object.assign({ enabled: false, key: '', binId: '', lastSync: 0 }, payload.sync);
         saveSync();
       }
-      // rename to avoid re-import
-      const donePath = backupPath.replace(/\.json$/, '_imported_' + Date.now() + '.json');
-      fs.renameSync(backupPath, donePath);
+      markImported(backupPath);
+      // keep original file, but create a dated copy in userData for safety
+      const copyName = 'cloudworkbench_backup_imported_' + Date.now() + '.json';
+      try { fs.copyFileSync(backupPath, path.join(userData, copyName)); } catch (e) {}
       console.log('migration imported from', backupPath);
-      return { ok: true, path: backupPath, renamed: donePath };
+      return { ok: true, path: backupPath };
     } catch (e) { console.error('migration failed', backupPath, e.message); }
   }
   return { ok: false };
@@ -89,10 +141,8 @@ function broadcast(channel, data) {
 function resolveAppFile(name) {
   // development: use workspace root
   if (isDev) return path.join(__dirname, '..', name);
-  // packaged: extraResources copied files
-  const packaged = path.join(process.resourcesPath, 'app', name);
-  if (fs.existsSync(packaged)) return packaged;
-  return path.join(__dirname, name);
+  // packaged: prebuild copied files into app/
+  return path.join(__dirname, 'app', name);
 }
 
 function createMainWindow() {
