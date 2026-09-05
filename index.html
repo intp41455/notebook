@@ -1264,7 +1264,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
     floatW.style.right=(d<768?10:18)+'px';floatW.style.bottom='80px';floatW.style.left='auto';floatW.style.top='auto';
   }
   const autoOpen=localStorage.getItem(FLOAT_AUTO_OPEN_KEY)!=='0';
-  if(autoOpen&&floatW){
+  if(autoOpen&&floatW&&!isDesktopEnv()){
     _floatMinimized=false;
     floatW.classList.add('open');
   }else{_floatMinimized=true;}
@@ -1277,11 +1277,11 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   });
   document.addEventListener('fullscreenchange',()=>{document.body.classList.toggle('fullscreen-mode',!!document.fullscreenElement);updateFsBtn();});
   window.addEventListener('resize',()=>{if(window.innerWidth>900)toggleDrawer(false);});
-  // 切回页面/重新打开标签页时自动恢复悬浮窗
+  // 切回页面/重新打开标签页时自动恢复悬浮窗（桌面版使用独立悬浮窗，不恢复内嵌）
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='visible'){
       const autoOpen=localStorage.getItem(FLOAT_AUTO_OPEN_KEY)!=='0';
-      if(autoOpen&&!_floatMinimized&&floatW){
+      if(autoOpen&&!_floatMinimized&&floatW&&!isDesktopEnv()){
         floatW.classList.add('open');
         updateFloatWidget();
       }
@@ -1289,7 +1289,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e
   });
   window.addEventListener('pageshow',()=>{
     const autoOpen=localStorage.getItem(FLOAT_AUTO_OPEN_KEY)!=='0';
-    if(autoOpen&&!_floatMinimized){
+    if(autoOpen&&!_floatMinimized&&!isDesktopEnv()){
       if(floatW){floatW.classList.add('open');updateFloatWidget();}
     }
   });
@@ -1391,7 +1391,13 @@ function getFloatPos(){
 function setFloatPos(x,y,minimized){
   try{localStorage.setItem(FLOAT_POS_KEY,JSON.stringify({x,y,minimized}));}catch(e){}
 }
+function isDesktopEnv(){return !!(window.__desktop&&window.__desktop.isDesktop);}
 function toggleFloat(){
+  // 桌面版：调用独立悬浮窗，不操作内嵌 widget
+  if(isDesktopEnv()){
+    window.__desktop.toggleFloat();
+    return;
+  }
   const w=document.getElementById('floatWidget');
   if(!_floatMinimized){
     _floatMinimized=true;

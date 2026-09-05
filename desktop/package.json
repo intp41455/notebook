@@ -27,7 +27,9 @@
       "main.js",
       "preload.js",
       "preload-float.js",
+      "preload-welcome.js",
       "float.html",
+      "welcome.html",
       "app/**/*",
       "assets/**/*"
     ],

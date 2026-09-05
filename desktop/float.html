@@ -105,7 +105,7 @@ html, body {
 <script>
 let state = { notes: [], todos: [], events: [], meta: {} };
 let currentTab = 'notes';
-let ignoreMouse = false;
+let passthrough = false;
 const api = window.__desktopFloat;
 
 function fmtDate(ts) {
@@ -151,6 +151,8 @@ function escapeHtml(s) {
 
 async function load() {
   try { state = await api.getState() || state; } catch(e){}
+  try { passthrough = await api.getPassthrough(); } catch(e){}
+  updatePassthroughUI();
   render();
 }
 
@@ -170,12 +172,16 @@ document.getElementById('minBtn').addEventListener('click', () => api.minimize()
 // open main
 document.getElementById('openMainBtn').addEventListener('click', () => api.toggleMain());
 
+function updatePassthroughUI() {
+  const btn = document.getElementById('pinBtn');
+  btn.classList.toggle('active', passthrough);
+  btn.title = passthrough ? '已鼠标穿透（不影响底层窗口）\n按 Alt+Shift+F 或托盘菜单恢复' : '鼠标穿透（点击后悬浮窗不再拦截鼠标）';
+}
+
 // mouse passthrough toggle
-document.getElementById('pinBtn').addEventListener('click', () => {
-  ignoreMouse = !ignoreMouse;
-  api.setIgnoreMouse(ignoreMouse);
-  document.getElementById('pinBtn').classList.toggle('active', ignoreMouse);
-  document.getElementById('pinBtn').title = ignoreMouse ? '已穿透，点击恢复' : '鼠标穿透';
+document.getElementById('pinBtn').addEventListener('click', async () => {
+  passthrough = await api.togglePassthrough();
+  updatePassthroughUI();
 });
 
 // drag window by header edge area
@@ -186,6 +192,7 @@ document.querySelector('.header').addEventListener('mousedown', (e) => {
 
 // auto refresh when data changes
 api.onStateChanged(() => load());
+api.onPassthroughChanged((value) => { passthrough = value; updatePassthroughUI(); });
 
 load();
 </script>

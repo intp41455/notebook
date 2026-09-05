@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, screen, shell, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -11,6 +11,8 @@ const floatPath = path.join(userData, 'float.json');
 let mainWindow = null;
 let floatWindow = null;
 let tray = null;
+let welcomeWindow = null;
+let welcomeFinished = false;
 
 /* ---------- file store ---------- */
 function readJSON(p, def = {}) {
@@ -29,7 +31,7 @@ function writeJSON(p, data) {
 const store = {
   state: readJSON(statePath, { notes: [], todos: [], events: [], meta: {} }),
   sync: readJSON(syncPath, { enabled: false, key: '', binId: '', lastSync: 0 }),
-  float: readJSON(floatPath, { x: null, y: null, minimized: false })
+  float: readJSON(floatPath, { x: null, y: null, minimized: false, passthrough: false })
 };
 
 function saveState() { writeJSON(statePath, store.state); }
@@ -212,6 +214,7 @@ function createFloatWindow() {
 
   floatWindow.once('ready-to-show', () => {
     if (!store.float.minimized) floatWindow.show();
+    applyPassthrough();
   });
 
   floatWindow.on('moved', () => {
@@ -237,6 +240,18 @@ function toggleFloatWindow() {
   saveFloat();
 }
 
+function applyPassthrough() {
+  if (!floatWindow || floatWindow.isDestroyed()) return;
+  floatWindow.setIgnoreMouseEvents(store.float.passthrough, { forward: true });
+  broadcast('passthrough-changed', store.float.passthrough);
+}
+
+function togglePassthrough() {
+  store.float.passthrough = !store.float.passthrough;
+  saveFloat();
+  applyPassthrough();
+}
+
 function createTray() {
   const iconPath = path.join(__dirname, 'assets', 'tray.png');
   tray = new Tray(fs.existsSync(iconPath) ? iconPath : path.join(__dirname, 'assets', 'icon.png'));
@@ -244,6 +259,7 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开主窗口', click: () => { if (mainWindow) mainWindow.show(); else createMainWindow(); } },
     { label: '显示/隐藏悬浮窗', click: toggleFloatWindow },
+    { label: '切换鼠标穿透', click: togglePassthrough },
     { label: '导入迁移文件', click: async () => {
       const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
       if (!r.canceled && r.filePaths[0]) {
@@ -299,15 +315,95 @@ ipcMain.on('float-resize', (_e, { width, height }) => {
 });
 
 ipcMain.on('float-set-ignore-mouse', (_e, ignore) => {
-  if (floatWindow && !floatWindow.isDestroyed()) floatWindow.setIgnoreMouseEvents(ignore, { forward: true });
+  store.float.passthrough = !!ignore;
+  saveFloat();
+  applyPassthrough();
 });
+
+ipcMain.handle('get-passthrough', () => store.float.passthrough);
+ipcMain.handle('toggle-passthrough', () => { togglePassthrough(); return store.float.passthrough; });
+
+/* ---------- welcome window ---------- */
+function hasUserData() {
+  return (store.state.notes && store.state.notes.length) ||
+         (store.state.todos && store.state.todos.length) ||
+         (store.state.events && store.state.events.length);
+}
+
+function shouldShowWelcome() {
+  return !hasUserData() && findBackupFiles().length === 0;
+}
+
+function createWelcomeWindow() {
+  welcomeWindow = new BrowserWindow({
+    width: 520,
+    height: 580,
+    title: '欢迎使用云记事板',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-welcome.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  welcomeWindow.loadFile(path.join(__dirname, 'welcome.html'));
+  welcomeWindow.once('ready-to-show', () => welcomeWindow.show());
+  welcomeWindow.on('closed', () => {
+    welcomeWindow = null;
+    // 用户直接关闭引导窗口且未完成，直接退出，避免留下空进程
+    if (!welcomeFinished) app.quit();
+  });
+}
+
+function finishWelcome() {
+  welcomeFinished = true;
+  if (welcomeWindow && !welcomeWindow.isDestroyed()) welcomeWindow.close();
+  if (!mainWindow || mainWindow.isDestroyed()) createMainWindow();
+  if (!floatWindow || floatWindow.isDestroyed()) createFloatWindow();
+  if (!tray) createTray();
+}
+
+ipcMain.on('welcome-open-browser', (_e, url) => {
+  shell.openExternal(url);
+});
+
+ipcMain.handle('welcome-import-file', async () => {
+  const r = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'JSON 迁移文件', extensions: ['json'] }]
+  });
+  if (r.canceled || !r.filePaths[0]) return { cancelled: true };
+  try {
+    importFromPath(r.filePaths[0]);
+    return { ok: true };
+  } catch (e) {
+    console.error('welcome import failed', e);
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.on('welcome-finish', () => finishWelcome());
 
 /* ---------- app lifecycle ---------- */
 app.whenReady().then(() => {
   const mig = tryAutoImport();
-  createMainWindow();
-  createFloatWindow();
-  createTray();
+
+  if (shouldShowWelcome()) {
+    createWelcomeWindow();
+  } else {
+    createMainWindow();
+    createFloatWindow();
+    createTray();
+  }
+
+  // 全局快捷键：Alt+Shift+F 切换鼠标穿透
+  try {
+    globalShortcut.register('Alt+Shift+F', togglePassthrough);
+  } catch (e) { console.error('register shortcut failed', e); }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
@@ -316,7 +412,7 @@ app.whenReady().then(() => {
 
   if (mig.ok) {
     setTimeout(() => {
-      dialog.showMessageBox(mainWindow, { type: 'info', title: '迁移完成', message: '已自动导入迁移文件，你的数据已恢复到桌面版。', detail: mig.path });
+      dialog.showMessageBox(mainWindow || {}, { type: 'info', title: '迁移完成', message: '已自动导入迁移文件，你的数据已恢复到桌面版。', detail: mig.path });
     }, 1200);
   }
 });
@@ -326,6 +422,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  globalShortcut.unregisterAll();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
   if (floatWindow && !floatWindow.isDestroyed()) floatWindow.destroy();
+  if (welcomeWindow && !welcomeWindow.isDestroyed()) welcomeWindow.destroy();
 });
